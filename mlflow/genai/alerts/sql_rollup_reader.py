@@ -239,14 +239,14 @@ class SqlRollupReader(RollupReader):
         """
         with self._session_maker() as session:
             rows = session.query(SqlRollupState).all()
-            watermarks = {(r.source, r.dimension_key, r.metric_key): r.watermark_ms for r in rows}
+            watermarks = {(r.source, r.dimension_key): r.watermark_ms for r in rows}
 
         if series is not None:
             relevant = [
                 watermarks[unit.key]
                 for unit in self._units
                 if unit.grouping.dimension_key == series.dimension_key
-                and unit.metric_key == series.metric_key
+                and series.metric_key in unit.metric_keys
                 and unit.key in watermarks
             ]
             # An unknown family has never been sealed, so nothing about it is
@@ -274,11 +274,11 @@ class SqlRollupReader(RollupReader):
         Only a rule whose signal is *absence* can tell the difference, and for that
         rule the difference is a false alarm.
 
-        Two starts, and the answer is the later of them:
+        Read from the ``rollup_state`` row of the unit that *seals* this series --
+        resolved through ``build_work_units``, since a unit now owns several metric
+        keys and ``rollup_state`` is keyed by ``(source, dimension_key)`` alone.
 
-        * when the **family** was first sealed, from ``rollup_state``. Guards the
-          fresh install, where aggregation began after the window opens.
-        Per *family*, deliberately, not per series. Narrowing it to the series' own
+        Per *unit*, deliberately, not per series. Narrowing it to the series' own
         earliest bucket looks like an improvement and is not: an empty bucket writes
         no row whether the series was being watched or simply had no traffic, so the
         first stored bucket cannot distinguish "we only started writing this series
@@ -287,18 +287,24 @@ class SqlRollupReader(RollupReader):
         measure -- a rule whose traffic starts mid-window would read as no-data
         rather than as the genuine zero it is.
         """
+        owning = {
+            unit.key
+            for unit in self._units
+            if unit.grouping.dimension_key == series.dimension_key
+            and series.metric_key in unit.metric_keys
+        }
+        if not owning:
+            return _NOTHING_IS_COVERED
         with self._session_maker() as session:
             # Values extracted inside the session: ORM instances detach when it
             # closes, and reading an attribute afterwards raises.
             starts = [
                 row.coverage_start_ms
                 for row in session.query(SqlRollupState).all()
-                if row.dimension_key == series.dimension_key
-                and row.metric_key == series.metric_key
-                and row.coverage_start_ms is not None
+                if (row.source, row.dimension_key) in owning and row.coverage_start_ms is not None
             ]
-        # No row yet means nothing has ever been sealed for this family, so no
-        # window is covered.
+        # No row yet means nothing has ever been sealed for this unit, so no window
+        # is covered.
         return max(starts) if starts else _NOTHING_IS_COVERED
 
     def _series_id(self, session, series: SeriesKey) -> int | None:

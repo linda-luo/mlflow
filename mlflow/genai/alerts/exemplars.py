@@ -72,7 +72,7 @@ def _collect(
         (
             u
             for u in build_work_units(store.db_type)
-            if u.metric_key == rule.metric_key and u.grouping.dimension_key == rule.dimension_key
+            if rule.metric_key in u.metric_keys and u.grouping.dimension_key == rule.dimension_key
         ),
         None,
     )

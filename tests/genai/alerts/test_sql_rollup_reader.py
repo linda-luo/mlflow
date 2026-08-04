@@ -69,14 +69,13 @@ def _set_watermark(store: SqlAlchemyStore, watermark_ms: int, source: str | None
         for unit in build_work_units(store.db_type):
             if source is not None and unit.source.name != source:
                 continue
-            source_name, dimension_key, metric_key = unit.key
+            source_name, dimension_key = unit.key
             row = session.get(SqlRollupState, unit.key)
             if row is None:
                 session.add(
                     SqlRollupState(
                         source=source_name,
                         dimension_key=dimension_key,
-                        metric_key=metric_key,
                         watermark_ms=watermark_ms,
                     )
                 )
@@ -290,7 +289,7 @@ def test_a_gap_in_the_window_reports_no_data(store: SqlAlchemyStore, experiment_
     _set_watermark(store, T - 100 * BUCKET_MS)
     run = aggregator.run_once(now_ms=now)
 
-    gap_bucket = run.units["trace_info/TRACES/latency"].gap_buckets[-1]
+    gap_bucket = run.units["trace_info/TRACES"].gap_buckets[-1]
     reader = SqlRollupReader(store)
     buckets = reader.read_buckets(
         _latency_series(experiment_id), gap_bucket, gap_bucket + BUCKET_MS

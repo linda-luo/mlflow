@@ -62,14 +62,13 @@ def _rule(experiment_id: int, **overrides) -> AlertRule:
 def _set_watermark(store: SqlAlchemyStore, watermark_ms: int) -> None:
     with store.ManagedSessionMaker(read_only=False) as session:
         for unit in build_work_units(store.db_type):
-            source, dimension_key, metric_key = unit.key
+            source, dimension_key = unit.key
             row = session.get(SqlRollupState, unit.key)
             if row is None:
                 session.add(
                     SqlRollupState(
                         source=source,
                         dimension_key=dimension_key,
-                        metric_key=metric_key,
                         watermark_ms=watermark_ms,
                     )
                 )

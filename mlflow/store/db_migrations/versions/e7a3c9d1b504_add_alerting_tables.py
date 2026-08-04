@@ -124,11 +124,10 @@ def upgrade():
         "rollup_state",
         sa.Column("source", sa.String(50), nullable=False),
         sa.Column("dimension_key", sa.String(20), nullable=False, server_default=""),
-        sa.Column("metric_key", sa.String(250), nullable=False, server_default=""),
         sa.Column("watermark_ms", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("coverage_start_ms", sa.BigInteger(), nullable=True),
         sa.Column("last_updated_ms", sa.BigInteger(), nullable=True),
-        sa.PrimaryKeyConstraint("source", "dimension_key", "metric_key", name="rollup_state_pk"),
+        sa.PrimaryKeyConstraint("source", "dimension_key", name="rollup_state_pk"),
     )
 
     op.create_table(

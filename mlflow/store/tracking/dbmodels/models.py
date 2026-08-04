@@ -4527,7 +4527,7 @@ class SqlRollupState(Base):
     """
     Aggregation watermark for one unit of work.
 
-    A unit is one ``(source, dimension_key, metric_key)`` family -- what the
+    A unit is one ``(source, dimension_key)`` scan -- what the
     aggregator calls a series family. Keyed this finely for three reasons:
 
     * **Cadence.** Sources arrive on different schedules; assessments in
@@ -4545,10 +4545,11 @@ class SqlRollupState(Base):
     """trace_info, trace_metrics, spans, span_metrics, span_errors, assessments."""
 
     dimension_key = Column(String(20), nullable=False, server_default="")
-    """TRACES | SPAN_TYPE | SPAN_NAME | SPAN_MODEL | ASSESSMENTS | ERROR."""
+    """TRACES | SPAN_TYPE | SPAN_NAME | SPAN_MODEL | ASSESSMENTS | ERROR.
 
-    metric_key = Column(String(250), nullable=False, server_default="")
-    """latency, total_cost, error_count, assessment_value, ..."""
+    With ``source`` this is the whole key. A unit may seal several metric keys --
+    ``trace_metrics`` seals five token metrics from one scan -- so the metric is a
+    property of the *series*, not of the watermark."""
 
     watermark_ms = Column(BigInteger, nullable=False, default=0)
     """Start of the last bucket sealed for this unit."""
@@ -4565,15 +4566,10 @@ class SqlRollupState(Base):
 
     last_updated_ms = Column(BigInteger, nullable=True)
 
-    __table_args__ = (
-        PrimaryKeyConstraint("source", "dimension_key", "metric_key", name="rollup_state_pk"),
-    )
+    __table_args__ = (PrimaryKeyConstraint("source", "dimension_key", name="rollup_state_pk"),)
 
     def __repr__(self):
-        return (
-            f"<SqlRollupState ({self.source}/{self.dimension_key}/{self.metric_key}, "
-            f"{self.watermark_ms})>"
-        )
+        return f"<SqlRollupState ({self.source}/{self.dimension_key}, {self.watermark_ms})>"
 
 
 class SqlAlertRule(Base):

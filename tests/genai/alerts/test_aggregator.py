@@ -102,14 +102,13 @@ def _set_watermark(store: SqlAlchemyStore, watermark_ms: int, source: str | None
         for unit in build_work_units(store.db_type):
             if source is not None and unit.source.name != source:
                 continue
-            source_name, dimension_key, metric_key = unit.key
+            source_name, dimension_key = unit.key
             row = session.get(SqlRollupState, unit.key)
             if row is None:
                 session.add(
                     SqlRollupState(
                         source=source_name,
                         dimension_key=dimension_key,
-                        metric_key=metric_key,
                         watermark_ms=watermark_ms,
                     )
                 )
@@ -117,11 +116,10 @@ def _set_watermark(store: SqlAlchemyStore, watermark_ms: int, source: str | None
                 row.watermark_ms = watermark_ms
 
 
-def _watermarks(store: SqlAlchemyStore) -> dict[tuple[str, str, str], int]:
+def _watermarks(store: SqlAlchemyStore) -> dict[tuple[str, str], int]:
     with store.ManagedSessionMaker() as session:
         return {
-            (r.source, r.dimension_key, r.metric_key): r.watermark_ms
-            for r in session.query(SqlRollupState).all()
+            (r.source, r.dimension_key): r.watermark_ms for r in session.query(SqlRollupState).all()
         }
 
 
@@ -220,7 +218,7 @@ def test_sealing_a_bucket_produces_exact_rows(store: SqlAlchemyStore, experiment
 
     run = RollupAggregator(store).run_once(now_ms=T + BUCKET_MS + LAG_MS)
 
-    assert run.units["trace_info/TRACES/latency"].sealed_buckets == [T]
+    assert run.units["trace_info/TRACES"].sealed_buckets == [T]
     rollups = _rollups(store)
     ok = rollups[(SeriesKey("TRACES", experiment_id, "latency", "OK"), T)]
     assert ok.count == 2
@@ -282,7 +280,7 @@ def test_watermark_advances_one_bucket_at_a_time(store: SqlAlchemyStore, experim
     original = aggregator._write_watermark
 
     def _record(session, unit, watermark_ms):
-        if unit.name == "trace_info/TRACES/latency":
+        if unit.name == "trace_info/TRACES":
             seen.append(watermark_ms)
         return original(session, unit, watermark_ms)
 
@@ -290,12 +288,12 @@ def test_watermark_advances_one_bucket_at_a_time(store: SqlAlchemyStore, experim
     run = aggregator.run_once(now_ms=T + 3 * BUCKET_MS + LAG_MS)
 
     assert seen == [T, T + BUCKET_MS, T + 2 * BUCKET_MS]
-    assert run.units["trace_info/TRACES/latency"].sealed_buckets == [
+    assert run.units["trace_info/TRACES"].sealed_buckets == [
         T,
         T + BUCKET_MS,
         T + 2 * BUCKET_MS,
     ]
-    assert _watermarks(store)[("trace_info", "TRACES", "latency")] == T + 2 * BUCKET_MS
+    assert _watermarks(store)[("trace_info", "TRACES")] == T + 2 * BUCKET_MS
 
 
 def test_resealing_a_bucket_is_idempotent(store: SqlAlchemyStore, experiment_id: int):
@@ -331,7 +329,7 @@ def test_gaps_are_marked_when_the_job_was_down(store: SqlAlchemyStore, experimen
 
     run = aggregator.run_once(now_ms=now)
 
-    trace_source = run.units["trace_info/TRACES/latency"]
+    trace_source = run.units["trace_info/TRACES"]
     resume = T - 4 * BUCKET_MS
     assert trace_source.gap_buckets == [resume - (10 - i) * BUCKET_MS for i in range(10)]
     assert trace_source.sealed_buckets == [resume + i * BUCKET_MS for i in range(5)]
@@ -356,7 +354,7 @@ def test_gap_marking_is_capped(store: SqlAlchemyStore, experiment_id: int):
 
     run = aggregator.run_once(now_ms=now)
 
-    assert len(run.units["trace_info/TRACES/latency"].gap_buckets) == 3
+    assert len(run.units["trace_info/TRACES"].gap_buckets) == 3
 
 
 def test_a_quiet_minute_writes_no_rows(store: SqlAlchemyStore, experiment_id: int):
@@ -512,22 +510,22 @@ def test_a_source_can_be_sealed_independently_of_the_others(
     )
     _set_watermark(store, T - BUCKET_MS)
 
-    run = RollupAggregator(store, only_units=["trace_info/TRACES/latency"]).run_once(
+    run = RollupAggregator(store, only_units=["trace_info/TRACES"]).run_once(
         now_ms=T + BUCKET_MS + LAG_MS
     )
 
-    assert set(run.units) == {"trace_info/TRACES/latency"}
+    assert set(run.units) == {"trace_info/TRACES"}
     written = {key.dimension_key for (key, _) in _rollups(store)}
     assert written == {"TRACES"}
 
     watermarks = _watermarks(store)
-    assert watermarks[("trace_info", "TRACES", "latency")] == T
+    assert watermarks[("trace_info", "TRACES")] == T
     # Untouched units must not be dragged forward, or their buckets would be
     # skipped without ever being scanned. `spans` shares nothing with `trace_info`,
     # and SPAN_NAME/latency is a *different unit of the same source* -- the case
     # that a per-source watermark could not have represented.
-    assert watermarks[("spans", "SPAN_TYPE", "latency")] == T - BUCKET_MS
-    assert watermarks[("spans", "SPAN_NAME", "latency")] == T - BUCKET_MS
+    assert watermarks[("spans", "SPAN_TYPE")] == T - BUCKET_MS
+    assert watermarks[("spans", "SPAN_NAME")] == T - BUCKET_MS
 
 
 def test_units_of_one_source_advance_independently(store: SqlAlchemyStore, experiment_id: int):
@@ -548,13 +546,11 @@ def test_units_of_one_source_advance_independently(store: SqlAlchemyStore, exper
     )
     _set_watermark(store, T - BUCKET_MS)
 
-    RollupAggregator(store, only_units=["spans/SPAN_NAME/latency"]).run_once(
-        now_ms=T + BUCKET_MS + LAG_MS
-    )
+    RollupAggregator(store, only_units=["spans/SPAN_NAME"]).run_once(now_ms=T + BUCKET_MS + LAG_MS)
 
     watermarks = _watermarks(store)
-    assert watermarks[("spans", "SPAN_NAME", "latency")] == T
-    assert watermarks[("spans", "SPAN_TYPE", "latency")] == T - BUCKET_MS
+    assert watermarks[("spans", "SPAN_NAME")] == T
+    assert watermarks[("spans", "SPAN_TYPE")] == T - BUCKET_MS
     assert {key.dimension_key for (key, _) in _rollups(store)} == {"SPAN_NAME"}
 
 
@@ -578,7 +574,7 @@ def test_timing_is_recorded_per_source(store: SqlAlchemyStore, experiment_id: in
 
     run = RollupAggregator(store).run_once(now_ms=T + BUCKET_MS + LAG_MS)
 
-    trace_info = run.units["trace_info/TRACES/latency"]
+    trace_info = run.units["trace_info/TRACES"]
     assert trace_info.scan_seconds > 0
     assert trace_info.upsert_seconds > 0
     assert run.total_seconds >= trace_info.total_seconds
@@ -779,8 +775,8 @@ def test_each_source_keeps_its_own_watermark(store: SqlAlchemyStore, experiment_
 
     run = RollupAggregator(store).run_once(now_ms=T + BUCKET_MS + LAG_MS)
 
-    assert run.units["trace_info/TRACES/latency"].sealed_buckets == [T]
-    assert run.units["assessments/ASSESSMENTS/assessment_value"].sealed_buckets == [
+    assert run.units["trace_info/TRACES"].sealed_buckets == [T]
+    assert run.units["assessments/ASSESSMENTS"].sealed_buckets == [
         T - 2 * BUCKET_MS,
         T - BUCKET_MS,
         T,
@@ -823,7 +819,8 @@ def test_every_series_pair_is_owned_by_exactly_one_unit(store: SqlAlchemyStore):
     units = build_work_units(store.db_type)
     owners: dict[tuple[str, str], list[str]] = {}
     for unit in units:
-        owners.setdefault((unit.grouping.dimension_key, unit.metric_key), []).append(unit.name)
+        for metric_key in unit.metric_keys:
+            owners.setdefault((unit.grouping.dimension_key, metric_key), []).append(unit.name)
 
     assert all(len(names) == 1 for names in owners.values()), owners
     expected = {pair for source in _build_sources(store.db_type) for pair in source.series_pairs}
@@ -1121,10 +1118,11 @@ def test_every_work_unit_can_be_named_by_some_rule(store: SqlAlchemyStore):
     accumulators rather than to the query.
     """
     orphans = [
-        unit.name
+        f"{unit.name}/{metric_key}"
         for unit in build_work_units(store.db_type)
-        if unit.metric_key not in METRIC_CATALOGUE
-        or unit.grouping.dimension_key not in METRIC_CATALOGUE[unit.metric_key].dimension_keys
+        for metric_key in unit.metric_keys
+        if metric_key not in METRIC_CATALOGUE
+        or unit.grouping.dimension_key not in METRIC_CATALOGUE[metric_key].dimension_keys
     ]
     assert orphans == []
 
@@ -1136,7 +1134,9 @@ def test_every_catalogue_pair_has_a_unit_that_writes_it(store: SqlAlchemyStore):
     accepted, the series is never written, and it silently never fires.
     """
     units = {
-        (unit.grouping.dimension_key, unit.metric_key) for unit in build_work_units(store.db_type)
+        (unit.grouping.dimension_key, metric_key)
+        for unit in build_work_units(store.db_type)
+        for metric_key in unit.metric_keys
     }
     missing = [
         (metric_key, dimension_key)

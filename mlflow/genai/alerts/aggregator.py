@@ -216,26 +216,41 @@ class _Accumulator:
 
 @dataclass(frozen=True)
 class WorkUnit:
-    """One ``(source, dimension_key, metric_key)`` family -- the unit of sealing.
+    """One ``(source, dimension_key)`` scan -- the unit of sealing.
 
     Units write disjoint series, so nothing orders them and each carries its own
     watermark row. That is what makes them independently schedulable, and it is also
     what lets a rule be evaluated against the freshness of the one family it reads
     rather than against the slowest family in the deployment.
+
+    **A unit may own several metric keys**, and the EAV sources do: ``trace_metrics``
+    holds five token metrics and ``span_metrics`` three cost metrics, all in one
+    table keyed by a ``key`` column. Splitting those into one unit per key meant five
+    scans of the same one-minute range, each discarding four fifths of what it read
+    -- the rollup index leads on ``timestamp_ms``, so ``key`` narrows nothing, it
+    only filters after the range has already been walked. One scan grouped by ``key``
+    reads that range once and fans out in Python.
+
+    Isolation is the thing given up, and it was worth little: these keys share a
+    table, a scan and an ingest path, so they fail together anyway.
     """
 
     source: "_Source"
     grouping: _Grouping
-    metric_key: str
+    metric_keys: tuple[str, ...]
 
     @property
     def name(self) -> str:
-        return f"{self.source.name}/{self.grouping.dimension_key}/{self.metric_key}"
+        return f"{self.source.name}/{self.grouping.dimension_key}"
 
     @property
-    def key(self) -> tuple[str, str, str]:
-        """Primary key of this unit's ``rollup_state`` row."""
-        return (self.source.name, self.grouping.dimension_key, self.metric_key)
+    def key(self) -> tuple[str, str]:
+        """Primary key of this unit's ``rollup_state`` row.
+
+        ``metric_key`` is deliberately not part of it: once the EAV keys are merged,
+        ``(source, dimension_key)`` is already unique across every unit.
+        """
+        return (self.source.name, self.grouping.dimension_key)
 
 
 def rollup_unit_names() -> tuple[str, ...]:
@@ -260,8 +275,13 @@ def build_work_units(db_type: str, sources: Sequence[str] | None = None) -> tupl
         if sources is not None and source.name not in sources:
             continue
         by_dimension = {g.dimension_key: g for g in source.groupings}
+        # Group the source's pairs by dimension, preserving declaration order, so a
+        # source declaring several metrics against one dimension yields one unit.
+        keys_by_dimension: dict[str, list[str]] = {}
         for dimension_key, metric_key in source.series_pairs:
-            units.append(WorkUnit(source, by_dimension[dimension_key], metric_key))
+            keys_by_dimension.setdefault(dimension_key, []).append(metric_key)
+        for dimension_key, metric_keys in keys_by_dimension.items():
+            units.append(WorkUnit(source, by_dimension[dimension_key], tuple(metric_keys)))
     return tuple(units)
 
 
@@ -785,12 +805,11 @@ class RollupAggregator:
         # A fresh install must not try to backfill from the epoch. Starting one
         # bucket back means the first run seals exactly the bucket that just closed.
         watermark = sealable_max - BUCKET_MS
-        source, dimension_key, metric_key = unit.key
+        source, dimension_key = unit.key
         session.add(
             SqlRollupState(
                 source=source,
                 dimension_key=dimension_key,
-                metric_key=metric_key,
                 watermark_ms=watermark,
                 # The first bucket this unit will seal. Everything earlier predates
                 # aggregation, so an empty window reaching back past it means "we
@@ -819,13 +838,21 @@ class RollupAggregator:
         # Only compute the index when a sketch is actually stored: a metric with no
         # spec (`error_count`) has nothing meaningful to bucket, and grouping by the
         # expression anyway would multiply the result set for nothing.
-        spec = spec_for(unit.metric_key)
+        # Every metric key a unit owns shares one sketch spec -- the five token
+        # metrics are all log-scaled, as are the three cost metrics -- so a single
+        # index expression serves the whole group. If that ever stops holding, the
+        # keys sharing a spec have to be scanned together and the rest split out.
+        spec = spec_for(unit.metric_keys[0])
         with_histogram = spec is not None and source.value_column is not None
         index_column = _index_expression(source.value_column, spec) if with_histogram else None
 
         group_columns: list[sa.ColumnElement] = [source.experiment_column]
         if dimension_column is not None:
             group_columns.append(dimension_column)
+        # EAV sources carry the metric in a column, so it is grouped rather than
+        # filtered to one value: one scan of the range instead of one per key.
+        if source.metric_key_column is not None:
+            group_columns.append(source.metric_key_column)
         if index_column is not None:
             group_columns.append(index_column)
 
@@ -842,15 +869,15 @@ class RollupAggregator:
             *source.extra_filters,
         ]
         if source.metric_key_column is not None:
-            # EAV sources carry several metrics in one table; a unit owns exactly one.
-            filters.append(source.metric_key_column == unit.metric_key)
+            filters.append(source.metric_key_column.in_(unit.metric_keys))
         if grouping.only_when_sql is not None:
             # Pushed down rather than filtered in Python -- possible only because this
             # grouping is scanned on its own. Also narrows the scan.
             filters.append(grouping.only_when_sql())
         query = query.filter(*filters).group_by(*group_columns)
 
-        metric_key = unit.metric_key[:_MAX_METRIC_KEY_LEN]
+        # Non-EAV sources own exactly one key, and it is not selected back.
+        single_metric_key = None if source.metric_key_column is not None else unit.metric_keys[0]
         accumulators: dict[SeriesKey, _Accumulator] = {}
         for row in query.all():
             experiment_id = row[0]
@@ -862,6 +889,11 @@ class RollupAggregator:
                 cursor += 1
             else:
                 raw_dimension = None
+            if single_metric_key is None:
+                metric_key = str(row[cursor])[:_MAX_METRIC_KEY_LEN]
+                cursor += 1
+            else:
+                metric_key = single_metric_key[:_MAX_METRIC_KEY_LEN]
             index = int(row[cursor]) if index_column is not None else 0
             cursor += 1 if index_column is not None else 0
             count = int(row[cursor])
@@ -881,7 +913,7 @@ class RollupAggregator:
             for key, acc in accumulators.items()
             if is_subscribed(
                 self._subscriptions,
-                SeriesFamily(unit.grouping.dimension_key, unit.metric_key),
+                SeriesFamily(unit.grouping.dimension_key, key.metric_key),
                 key.experiment_id,
                 key.dimension_value,
             )
@@ -1030,7 +1062,9 @@ class RollupAggregator:
             .query(SqlMetricSeries.series_id)
             .filter(
                 SqlMetricSeries.dimension_key == unit.grouping.dimension_key,
-                SqlMetricSeries.metric_key == unit.metric_key,
+                # Every key the unit owns: one scan fell behind, so every family it
+                # seals is equally unobserved for those buckets.
+                SqlMetricSeries.metric_key.in_(unit.metric_keys),
             )
             .all()
         ]
