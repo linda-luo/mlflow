@@ -11,9 +11,6 @@ import threading
 
 from mlflow.environment_variables import (
     MLFLOW_ALERT_EVALUATOR_THREADS,
-    MLFLOW_ALERT_WORKER_COUNT,
-    MLFLOW_ALERT_WORKER_ID,
-    MLFLOW_ALERT_WORKER_INDEX,
 )
 from mlflow.genai.alerts.evaluator import AlertEvaluator, EvaluationCycle
 from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
@@ -32,19 +29,6 @@ for the whole process, shared with the periodic-task consumer's 5 threads and ev
 handing back timeouts, which surface as TEMPORARILY_UNAVAILABLE and cost the entire
 cycle rather than slowing it down.
 """
-
-
-def _worker_identity() -> tuple[str, int, int]:
-    """Which rules this process is assigned, and the id it leases under.
-
-    Defaults to a single worker, which is the self-hosted case. A deployment
-    running several replicas sets these so each claims a disjoint slice of rules
-    and keeps its merge cache warm.
-    """
-    worker_count = max(1, MLFLOW_ALERT_WORKER_COUNT.get())
-    worker_index = MLFLOW_ALERT_WORKER_INDEX.get() % worker_count
-    worker_id = MLFLOW_ALERT_WORKER_ID.get() or f"worker-{worker_index}"
-    return worker_id, worker_count, worker_index
 
 
 def _evaluator_threads(db_type: str) -> int:
@@ -96,13 +80,9 @@ def _get_evaluator() -> AlertEvaluator:
         # then dies with "'RestStore' object has no attribute 'ManagedSessionMaker'".
         # This is the accessor every other periodic task uses.
         store = _get_tracking_store()
-        worker_id, worker_count, worker_index = _worker_identity()
         _evaluator = AlertEvaluator(
             SqlRollupReader(store),
             store,
-            worker_id=worker_id,
-            worker_count=worker_count,
-            worker_index=worker_index,
             notifier=dispatch,
             max_workers=_evaluator_threads(store.db_type),
         )
@@ -110,7 +90,7 @@ def _get_evaluator() -> AlertEvaluator:
 
 
 def run_alert_evaluation(now_ms: int | None = None) -> EvaluationCycle:
-    """Evaluate every rule due on this worker. Zero-arg, for the scheduler."""
+    """Evaluate every rule that is due. Zero-arg, for the scheduler."""
     return _get_evaluator().run_once(now_ms=now_ms)
 
 

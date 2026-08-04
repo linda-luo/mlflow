@@ -1412,18 +1412,6 @@ MLFLOW_SERVER_GRAPHQL_MAX_ALIASES = _EnvironmentVariable(
 #: (default: ``1``)
 MLFLOW_ALERT_EVALUATOR_THREADS = _EnvironmentVariable("MLFLOW_ALERT_EVALUATOR_THREADS", int, 1)
 
-#: Number of replicas sharing the alert evaluation queue, and this replica's index
-#: into it. Rules are assigned to a replica by a stable hash of their id so each
-#: replica's incremental-merge cache stays warm; within a replica, threads share one
-#: cache and take whatever group is next.
-#: (default: ``1`` / ``0``)
-MLFLOW_ALERT_WORKER_COUNT = _EnvironmentVariable("MLFLOW_ALERT_WORKER_COUNT", int, 1)
-MLFLOW_ALERT_WORKER_INDEX = _EnvironmentVariable("MLFLOW_ALERT_WORKER_INDEX", int, 0)
-
-#: Lease owner string for this process. Defaults to ``worker-<index>``.
-#: (default: ``None``)
-MLFLOW_ALERT_WORKER_ID = _EnvironmentVariable("MLFLOW_ALERT_WORKER_ID", str, None)
-
 
 #: Whether to disable schema details in error messages for MLflow schema enforcement.
 #: (default: ``False``)

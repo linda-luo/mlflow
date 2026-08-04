@@ -155,15 +155,12 @@ def test_a_brand_new_rule_is_not_due_on_the_next_tick(store, experiment_id):
     )
 
     now_ms = get_current_time_millis()
-    assert store.lease_due_alert_rules("worker-0", now_ms) == []
+    assert store.due_alert_rules(now_ms) == []
     # And it is still not due one interval later, which is when it used to run.
-    assert (
-        store.lease_due_alert_rules("worker-0", now_ms + created.evaluation_interval_seconds * 1000)
-        == []
-    )
+    assert store.due_alert_rules(now_ms + created.evaluation_interval_seconds * 1000) == []
     # Due once the window it has to wait out has passed.
-    leased = store.lease_due_alert_rules("worker-0", created.next_evaluation_at_ms)
-    assert [r.alert_rule_id for r in leased] == [created.alert_rule_id]
+    due = store.due_alert_rules(created.next_evaluation_at_ms)
+    assert [r.alert_rule_id for r in due] == [created.alert_rule_id]
 
 
 def test_a_percentile_threshold_is_stored_exactly_as_given(store, experiment_id):
@@ -545,7 +542,7 @@ def test_delete_is_soft_and_keeps_instances_readable(store, experiment_id):
     assert instance.dismissed_by == "system:rule_deleted"
 
 
-def test_delete_drops_the_lease(store, experiment_id):
+def test_delete_soft_deletes_rather_than_removing_the_row(store, experiment_id):
     rule = store.create_alert_rule(_rule(experiment_id))
     store.delete_alert_rule(rule.alert_rule_id)
 
@@ -559,8 +556,6 @@ def test_delete_drops_the_lease(store, experiment_id):
             .one()
         )
         assert row.deleted_at_ms is not None
-        assert row.lease_owner is None
-        assert row.lease_expires_ms is None
 
 
 def test_list_instances_defaults_to_the_undismissed_states(store, experiment_id):
@@ -982,7 +977,7 @@ def test_rest_store_drops_unknown_response_fields(rest_store):
 # ----------------------------------------------------------------------
 
 
-def test_lease_due_rules_claims_only_rules_that_are_due(store, experiment_id):
+def test_only_due_enabled_undeleted_rules_come_back(store, experiment_id):
     now_ms = get_current_time_millis()
     due = store.create_alert_rule(_rule(experiment_id, name="due"))
     not_due = store.create_alert_rule(_rule(experiment_id, name="not-due"))
@@ -1003,15 +998,14 @@ def test_lease_due_rules_claims_only_rules_that_are_due(store, experiment_id):
                 SqlAlertRule.next_evaluation_at_ms: next_ms
             })
 
-    leased = store.lease_due_alert_rules("worker-1", now_ms)
-    assert [r.alert_rule_id for r in leased] == [due.alert_rule_id]
-    assert leased[0].lease_owner is None or leased[0].lease_owner == "worker-1"
+    assert [r.alert_rule_id for r in store.due_alert_rules(now_ms)] == [due.alert_rule_id]
 
-    # A second worker cannot claim what worker-1 holds.
-    assert store.lease_due_alert_rules("worker-2", now_ms) == []
+    # Reading is not claiming: asking twice returns the same rule. Cycles are
+    # serialized by `alert-evaluator-lock`, not by a lease.
+    assert [r.alert_rule_id for r in store.due_alert_rules(now_ms)] == [due.alert_rule_id]
 
 
-def test_record_evaluated_updates_the_rule_and_releases_the_lease(store, experiment_id):
+def test_record_evaluated_updates_the_rule(store, experiment_id):
     rule = store.create_alert_rule(_rule(experiment_id))
     now_ms = get_current_time_millis()
 
@@ -1026,10 +1020,6 @@ def test_record_evaluated_updates_the_rule_and_releases_the_lease(store, experim
     assert updated.last_evaluated_ms == now_ms
     assert updated.next_evaluation_at_ms == now_ms + 300_000
     assert updated.last_sample_count == 412
-    # Released so a rule whose interval is shorter than the lease duration is
-    # not blocked by its own previous claim.
-    assert updated.lease_owner is None
-    assert updated.lease_expires_ms is None
 
 
 def test_save_alert_instance_inserts_then_updates(store, experiment_id):
@@ -1316,3 +1306,24 @@ def test_dispatch_defaults_to_in_app_and_survives_a_failing_channel():
     rule.channels = [{"type": "not_registered"}]
     dispatch(rule, instance)
     assert sent == ["inst-1"]
+
+
+def test_the_alerting_schema_declares_no_lease_columns():
+    """Alerting used to coordinate across replicas; nothing else in MLflow does.
+
+    Every other periodic task settles for ``huey.lock_task`` and a single consumer,
+    which is the deployment shape the product supports. Alerting carried lease
+    columns, ``hashtext`` sticky assignment, ``SKIP LOCKED`` and a dialect-split
+    query for a shape nothing else offered -- and ``rollup_state``'s lease was never
+    read or written at all.
+
+    This pins the removal: reintroducing a lease should be a deliberate decision,
+    not something that reappears because a future change assumed it was still there.
+    """
+    from mlflow.store.tracking.dbmodels.models import SqlAlertInstance, SqlAlertRule, SqlRollupState
+
+    for model in (SqlAlertRule, SqlAlertInstance, SqlRollupState):
+        columns = {c.name for c in model.__table__.columns}
+        assert not {c for c in columns if "lease" in c}, f"{model.__name__} grew a lease column"
+        indexes = {i.name for i in model.__table__.indexes}
+        assert "index_rollup_state_claim" not in indexes

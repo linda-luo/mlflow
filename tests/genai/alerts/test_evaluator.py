@@ -3,8 +3,6 @@ import threading
 import time
 
 import pytest
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql, sqlite
 
 from mlflow.genai.alerts import histogram as hist
 from mlflow.genai.alerts.entities import (
@@ -19,15 +17,11 @@ from mlflow.genai.alerts.evaluator import (
     Decision,
     IncrementalMergeCache,
     WindowAccumulator,
-    build_due_rule_query,
     decide,
     evaluation_window,
     group_rules,
-    is_orphaned,
-    may_claim,
     next_due_ms,
     read_signature,
-    sticky_worker_index,
 )
 from mlflow.genai.alerts.rollup_reader import Bucket, FakeRollupReader, aggregate_buckets
 from mlflow.genai.alerts.sketch import LOG_SKETCH
@@ -65,7 +59,7 @@ class InMemoryAlertStore:
         self.evaluated: list[tuple[str, int, int, int | None]] = []
         self._lock = threading.RLock()
 
-    def lease_due_alert_rules(self, worker_id, now_ms, worker_count, worker_index, limit):
+    def due_alert_rules(self, now_ms, limit):
         with self._lock:
             due = [
                 r
@@ -73,13 +67,8 @@ class InMemoryAlertStore:
                 if r.enabled
                 and r.deleted_at_ms is None
                 and (r.next_evaluation_at_ms or 0) <= now_ms
-                and may_claim(r, now_ms, worker_count, worker_index)
-                and (r.lease_expires_ms is None or r.lease_expires_ms < now_ms)
             ]
             due.sort(key=lambda r: r.next_evaluation_at_ms or 0)
-            for rule in due[:limit]:
-                rule.lease_owner = worker_id
-                rule.lease_expires_ms = now_ms + 60_000
             return due[:limit]
 
     def get_open_alert_instance(self, alert_rule_id):
@@ -117,25 +106,13 @@ class InMemoryAlertStore:
         last_evaluated_ms,
         next_evaluation_at_ms,
         last_sample_count,
-        lease_owner=None,
     ):
         with self._lock:
             rule = self.rules.get(alert_rule_id)
-            # Same guard as the real store: don't write through someone else's
-            # lease, but an unleased rule still records. A test that double-claims
-            # then shows up as a missing write rather than a silent double one.
-            held_by_other = (
-                rule is not None
-                and lease_owner is not None
-                and rule.lease_owner is not None
-                and rule.lease_owner != lease_owner
-            )
-            if rule is not None and not held_by_other:
+            if rule is not None:
                 rule.last_evaluated_ms = last_evaluated_ms
                 rule.next_evaluation_at_ms = next_evaluation_at_ms
                 rule.last_sample_count = last_sample_count
-                rule.lease_owner = None
-                rule.lease_expires_ms = None
             self.evaluated.append((
                 alert_rule_id,
                 last_evaluated_ms,
@@ -1027,8 +1004,9 @@ def test_a_gap_leaves_the_window_when_it_expires():
 ###############################################################################
 # Concurrency
 #
-# None of this was covered before: `worker_count > 1` was tested only as
-# arithmetic, and no test had ever started a thread.
+# Threads *within* one evaluator task. Cross-process coordination was removed --
+# nothing else in MLflow does it -- so what remains is one process, one huey lock,
+# and a pool over read groups.
 ###############################################################################
 
 
@@ -1161,105 +1139,7 @@ def test_a_cold_signature_is_read_once_however_many_threads_want_it():
     assert len(set(counts)) == 1
 
 
-def test_one_rule_is_leased_once_even_when_several_workers_race():
-    """The claim is the atomic step, so a rule is evaluated by exactly one caller."""
-    rules = _many_group_rules(6)
-    store = InMemoryAlertStore(rules)
-    now = T0 + 61 * BUCKET_MS
-    claimed: list[list[AlertRule]] = []
-    lock = threading.Lock()
-    barrier = threading.Barrier(4)
-
-    def claim(worker_index):
-        barrier.wait()
-        got = store.lease_due_alert_rules(
-            worker_id=f"worker-{worker_index}",
-            now_ms=now,
-            worker_count=1,
-            worker_index=0,
-            limit=50,
-        )
-        with lock:
-            claimed.append(got)
-
-    threads = [threading.Thread(target=claim, args=(i,)) for i in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    all_ids = [r.alert_rule_id for batch in claimed for r in batch]
-    assert sorted(all_ids) == sorted(r.alert_rule_id for r in rules)
-
-
-###############################################################################
-# Leasing
-###############################################################################
-
-
-def test_sticky_assignment_is_stable_and_spreads_rules():
-    ids = [f"rule-{i}" for i in range(200)]
-    first = [sticky_worker_index(i, 4) for i in ids]
-    second = [sticky_worker_index(i, 4) for i in ids]
-
-    assert first == second
-    assert set(first) == {0, 1, 2, 3}
-    assert all(sticky_worker_index(i, 1) == 0 for i in ids)
-
-
-def test_a_rule_two_intervals_overdue_may_be_claimed_by_anyone():
-    rule = make_rule(evaluation_interval_seconds=300)
-    now = T0
-
-    rule.next_evaluation_at_ms = now - 300_000
-    assert is_orphaned(rule, now) is False
-
-    rule.next_evaluation_at_ms = now - 601_000
-    assert is_orphaned(rule, now) is True
-    assert all(may_claim(rule, now, 4, index) for index in range(4))
-
-
-def test_a_rule_on_time_is_only_claimed_by_its_owner():
-    rule = make_rule(evaluation_interval_seconds=300, next_evaluation_at_ms=T0)
-    owner = sticky_worker_index(rule.alert_rule_id, 4)
-
-    claims = [may_claim(rule, T0, 4, index) for index in range(4)]
-
-    assert claims.count(True) == 1
-    assert claims[owner] is True
-
-
-def test_postgres_lease_query_pushes_stickiness_and_skip_locked_into_sql():
-    query = build_due_rule_query("postgresql", T0, worker_count=4, worker_index=2, limit=50)
-    compiled = str(query.compile(dialect=postgresql.dialect()))
-
-    assert "hashtext" in compiled
-    # Cast before abs(): abs(int4 -2147483648) overflows and would abort the scan.
-    assert "abs(CAST(hashtext" in compiled
-    assert "FOR UPDATE" in compiled
-    assert "SKIP LOCKED" in compiled
-    assert "next_evaluation_at_ms" in compiled
-    assert "deleted_at_ms IS NULL" in compiled
-
-
-def test_sqlite_lease_query_omits_the_postgres_only_constructs():
-    query = build_due_rule_query("sqlite", T0, worker_count=4, worker_index=2, limit=50)
-    compiled = str(query.compile(dialect=sqlite.dialect()))
-
-    assert "hashtext" not in compiled
-    assert "FOR UPDATE" not in compiled
-    assert "ORDER BY" in compiled
-
-
-def test_lease_query_orders_most_overdue_first_so_nothing_starves():
-    query = build_due_rule_query("sqlite", T0, worker_count=1, worker_index=0, limit=50)
-    order_by = [str(c) for c in query._order_by_clauses]
-
-    assert order_by == ["alert_rules.next_evaluation_at_ms"]
-    assert isinstance(query, sa.sql.Select)
-
-
-def test_only_due_undeleted_enabled_rules_are_leased():
+def test_only_due_undeleted_enabled_rules_are_evaluated():
     reader = FakeRollupReader()
     seed_range(reader, T0, T0 + 60 * BUCKET_MS, count=5, value=10_000)
     now = T0 + 60 * BUCKET_MS
@@ -1274,9 +1154,6 @@ def test_only_due_undeleted_enabled_rules_are_leased():
     cycle = AlertEvaluator(reader, store).run_once(now_ms=now)
 
     assert [e.rule.alert_rule_id for e in cycle.evaluations] == ["due"]
-    # Claimed, then released on the way out: a rule whose interval is shorter than
-    # the lease duration must not be blocked by its own previous claim.
-    assert store.rules["due"].lease_owner is None
     # Advances from the rule's previous due time (``now - 1``), not from when it
     # actually ran -- scheduling off execution time halves the effective rate.
     assert store.rules["due"].next_evaluation_at_ms == (now - 1) + 300_000
@@ -1325,7 +1202,7 @@ class TestNextDueScheduling:
         evaluated_at = []
         for tick_ms in range(0, 60 * interval_ms, interval_ms):
             if rule.next_evaluation_at_ms <= tick_ms:
-                ran_at = tick_ms + 900  # dispatch + lease + query
+                ran_at = tick_ms + 900  # dispatch + query
                 evaluated_at.append(ran_at)
                 rule.next_evaluation_at_ms = next_due_ms(rule, ran_at)
 

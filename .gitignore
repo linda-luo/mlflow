@@ -150,3 +150,4 @@ CLAUDE.local.md
 
 .playwright/
 .playwright-cli/
+.playwright-mcp/

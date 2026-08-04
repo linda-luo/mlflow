@@ -326,8 +326,6 @@ class AlertRule:
     last_evaluated_ms: int | None = None
     next_evaluation_at_ms: int | None = None
     last_sample_count: int | None = None
-    lease_owner: str | None = None
-    lease_expires_ms: int | None = None
     deleted_at_ms: int | None = None
     channels: list[dict] = field(default_factory=list)
     created_by: str | None = None

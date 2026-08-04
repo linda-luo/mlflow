@@ -9371,7 +9371,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     def _alert_rule_query(self, session, include_deleted=False):
         query = self._get_query(session, SqlAlertRule)
         if not include_deleted:
-            # Soft-deleted rules disappear from get/list and from the lease
+            # Soft-deleted rules disappear from get/list and from the due-rule
             # scan, but their instances stay readable.
             query = query.filter(SqlAlertRule.deleted_at_ms.is_(None))
         return query
@@ -9695,9 +9695,6 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             # one. The row stays, and its instances stay readable.
             sql_rule.deleted_at_ms = now_ms
             sql_rule.last_updated_timestamp = now_ms
-            # Drop the lease so a worker mid-cycle doesn't hold a deleted rule.
-            sql_rule.lease_owner = None
-            sql_rule.lease_expires_ms = None
             # Close any open instance. Deleting a rule is an explicit "stop telling
             # me about this", so leaving an unacknowledged red row for a rule that
             # no longer exists is noise the user cannot act on -- and nothing will
@@ -9812,40 +9809,23 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     # ------------------------------------------------------------------
     # Alerting: the evaluation side.
     #
-    # Deliberately absent from `abstract_store` and `rest_store`: leasing needs
-    # dialect-specific SQL and only ever runs in-process on the server, so a
-    # remote client has no use for any of it. These four methods are the
-    # `AlertEvaluationStore` protocol in mlflow/genai/alerts/evaluator.py.
+    # Deliberately absent from `abstract_store` and `rest_store`: these only ever
+    # run in-process on the server, so a remote client has no use for any of them.
+    # They are the `AlertEvaluationStore` protocol in
+    # mlflow/genai/alerts/evaluator.py.
     #
-    # None of them is workspace-scoped. A worker runs outside any workspace
-    # context and must evaluate every tenant's rules; scoping the lease scan
+    # None of them is workspace-scoped. The evaluator runs outside any workspace
+    # context and must evaluate every tenant's rules; scoping the due-rule scan
     # would silently stop evaluating rules for every workspace but the active
     # one. The user-facing methods above are scoped as usual.
     # ------------------------------------------------------------------
 
-    def lease_due_alert_rules(
-        self,
-        worker_id: str,
-        now_ms: int,
-        worker_count: int = 1,
-        worker_index: int = 0,
-        limit: int = 50,
-    ) -> list:
-        from mlflow.genai.alerts.evaluator import lease_due_rule_ids
+    def due_alert_rules(self, now_ms: int, limit: int = 50) -> list:
+        from mlflow.genai.alerts.evaluator import due_rule_ids
 
-        with self.ManagedSessionMaker(read_only=False) as session:
-            # The query itself lives with the evaluator: it is dialect-aware
-            # (Postgres pushes sticky assignment and SKIP LOCKED into the
-            # database; other dialects over-fetch and filter in Python) and is
-            # tested there.
-            rule_ids = lease_due_rule_ids(
-                session,
-                worker_id,
-                now_ms,
-                worker_count=worker_count,
-                worker_index=worker_index,
-                limit=limit,
-            )
+        with self.ManagedSessionMaker(read_only=True) as session:
+            # The query lives with the evaluator, which is where it is tested.
+            rule_ids = due_rule_ids(session, now_ms, limit=limit)
             if not rule_ids:
                 return []
             rows = {
@@ -9855,8 +9835,8 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 .filter(SqlAlertRule.alert_rule_id.in_(rule_ids))
                 .all()
             }
-            # Preserve the most-overdue-first order the lease query established;
-            # it is what keeps a badly overdue rule from starving.
+            # Preserve the most-overdue-first order the query established; it is
+            # what keeps a badly overdue rule from starving under the batch limit.
             return [_sql_alert_rule_to_entity(rows[rid]) for rid in rule_ids if rid in rows]
 
     def get_open_alert_instance(self, alert_rule_id: str):
@@ -9925,34 +9905,13 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
         last_evaluated_ms: int,
         next_evaluation_at_ms: int,
         last_sample_count: int | None,
-        lease_owner: str | None = None,
     ) -> None:
         with self.ManagedSessionMaker(read_only=False) as session:
-            query = session.query(SqlAlertRule).filter(SqlAlertRule.alert_rule_id == alert_rule_id)
-            if lease_owner is not None:
-                # Don't clobber a lease someone else holds. A caller that lost the
-                # claim race would otherwise free the winner's lease mid-evaluation
-                # and overwrite its `next_evaluation_at_ms` from a stale snapshot.
-                #
-                # An *unleased* rule still records: `evaluate_rules` is documented
-                # as driveable from a script, and requiring a lease would make that
-                # path silently stop advancing `last_evaluated_ms`.
-                query = query.filter(
-                    or_(
-                        SqlAlertRule.lease_owner.is_(None),
-                        SqlAlertRule.lease_owner == lease_owner,
-                    )
-                )
-            query.update(
+            session.query(SqlAlertRule).filter(SqlAlertRule.alert_rule_id == alert_rule_id).update(
                 {
                     SqlAlertRule.last_evaluated_ms: last_evaluated_ms,
                     SqlAlertRule.next_evaluation_at_ms: next_evaluation_at_ms,
                     SqlAlertRule.last_sample_count: last_sample_count,
-                    # Release the lease as soon as the cycle is done, so a
-                    # rule whose interval is shorter than the lease duration
-                    # is not blocked by its own previous claim.
-                    SqlAlertRule.lease_owner: None,
-                    SqlAlertRule.lease_expires_ms: None,
                 },
                 synchronize_session=False,
             )
@@ -10213,8 +10172,6 @@ def _sql_alert_rule_to_entity(sql_rule):
         last_evaluated_ms=sql_rule.last_evaluated_ms,
         next_evaluation_at_ms=sql_rule.next_evaluation_at_ms,
         last_sample_count=sql_rule.last_sample_count,
-        lease_owner=sql_rule.lease_owner,
-        lease_expires_ms=sql_rule.lease_expires_ms,
         deleted_at_ms=sql_rule.deleted_at_ms,
         channels=json.loads(sql_rule.channels) if sql_rule.channels else [],
         created_by=sql_rule.created_by,

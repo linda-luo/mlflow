@@ -4563,23 +4563,10 @@ class SqlRollupState(Base):
     exactly the moment a user is deciding whether to trust the product.
     """
 
-    lease_owner = Column(String(64), nullable=True)
-    """Worker currently sealing this unit, if any.
-
-    Mutual exclusion within one deployment already comes from the scheduler's
-    per-unit lock; this exists so that several *replicas* sharing a database do
-    not each seal every unit.
-    """
-
-    lease_expires_ms = Column(BigInteger, nullable=True)
-    """When an abandoned lease may be reclaimed. A crashed worker stalls its unit
-    only until this passes, never permanently."""
-
     last_updated_ms = Column(BigInteger, nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("source", "dimension_key", "metric_key", name="rollup_state_pk"),
-        Index("index_rollup_state_claim", "lease_expires_ms", "watermark_ms"),
     )
 
     def __repr__(self):
@@ -4630,8 +4617,6 @@ class SqlAlertRule(Base):
     is arithmetic across two columns and no index can seek it."""
 
     last_sample_count = Column(Integer, nullable=True)
-    lease_owner = Column(String(64), nullable=True)
-    lease_expires_ms = Column(BigInteger, nullable=True)
     deleted_at_ms = Column(BigInteger, nullable=True)
 
     channels = Column(Text, nullable=True)

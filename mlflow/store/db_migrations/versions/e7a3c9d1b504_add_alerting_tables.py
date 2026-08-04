@@ -127,13 +127,8 @@ def upgrade():
         sa.Column("metric_key", sa.String(250), nullable=False, server_default=""),
         sa.Column("watermark_ms", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("coverage_start_ms", sa.BigInteger(), nullable=True),
-        sa.Column("lease_owner", sa.String(64), nullable=True),
-        sa.Column("lease_expires_ms", sa.BigInteger(), nullable=True),
         sa.Column("last_updated_ms", sa.BigInteger(), nullable=True),
         sa.PrimaryKeyConstraint("source", "dimension_key", "metric_key", name="rollup_state_pk"),
-    )
-    op.create_index(
-        "index_rollup_state_claim", "rollup_state", ["lease_expires_ms", "watermark_ms"]
     )
 
     op.create_table(
@@ -160,8 +155,6 @@ def upgrade():
         sa.Column("last_evaluated_ms", sa.BigInteger(), nullable=True),
         sa.Column("next_evaluation_at_ms", sa.BigInteger(), nullable=True),
         sa.Column("last_sample_count", sa.Integer(), nullable=True),
-        sa.Column("lease_owner", sa.String(64), nullable=True),
-        sa.Column("lease_expires_ms", sa.BigInteger(), nullable=True),
         sa.Column("deleted_at_ms", sa.BigInteger(), nullable=True),
         sa.Column("channels", sa.Text(), nullable=True),
         sa.Column("created_by", sa.String(255), nullable=True),

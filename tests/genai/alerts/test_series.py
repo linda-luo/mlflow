@@ -50,7 +50,7 @@ class InMemoryStore:
     def __init__(self, rules):
         self.rules = rules
 
-    def lease_due_alert_rules(self, *args, **kwargs):
+    def due_alert_rules(self, *args, **kwargs):
         return list(self.rules)
 
     def get_open_alert_instance(self, *args, **kwargs):

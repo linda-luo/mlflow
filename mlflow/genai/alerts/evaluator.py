@@ -20,7 +20,6 @@ Three things here are easy to get subtly wrong and are therefore stated once:
 
 import logging
 import threading
-import zlib
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Callable, Protocol
@@ -42,8 +41,8 @@ from mlflow.utils.time import get_current_time_millis
 
 _logger = logging.getLogger(__name__)
 
-DEFAULT_LEASE_DURATION_MS = 60_000
-DEFAULT_LEASE_BATCH_SIZE = 50
+DEFAULT_BATCH_SIZE = 50
+"""Rules evaluated in one cycle. A bound on the cycle, not a claim."""
 DEFAULT_MAX_WORKERS = 1
 """Evaluator threads per process. One unless a deployment opts in.
 
@@ -499,53 +498,15 @@ def next_due_ms(rule: AlertRule, now_ms: int) -> int:
     return next_ms
 
 
-def sticky_worker_index(alert_rule_id: str, worker_count: int) -> int:
-    """Which worker prefers this rule.
+def build_due_rule_query(now_ms: int, limit: int = DEFAULT_BATCH_SIZE):
+    """SELECT of due rule ids, most-overdue-first.
 
-    Sticky assignment exists solely so the incremental merge cache stays warm:
-    without it a rule bounces between workers, each with a cold cache, and the
-    optimization silently degrades to a full read every cycle.
-    """
-    if worker_count <= 1:
-        return 0
-    return zlib.crc32(alert_rule_id.encode("utf-8")) % worker_count
-
-
-def _orphaned(next_evaluation_at_ms: int | None, interval_seconds: int, now_ms: int) -> bool:
-    if next_evaluation_at_ms is None:
-        return False
-    return next_evaluation_at_ms < now_ms - 2 * interval_seconds * 1000
-
-
-def is_orphaned(rule: AlertRule, now_ms: int) -> bool:
-    """Two intervals overdue: the preferred owner is presumed dead.
-
-    Stickiness is a preference, not a constraint. This is the release valve, so a
-    worker crash costs one cold cache rather than a stalled rule.
-    """
-    return _orphaned(rule.next_evaluation_at_ms, rule.evaluation_interval_seconds, now_ms)
-
-
-def may_claim(rule: AlertRule, now_ms: int, worker_count: int, worker_index: int) -> bool:
-    return sticky_worker_index(rule.alert_rule_id, worker_count) == worker_index or is_orphaned(
-        rule, now_ms
-    )
-
-
-def build_due_rule_query(
-    dialect: str,
-    now_ms: int,
-    worker_count: int,
-    worker_index: int,
-    limit: int = DEFAULT_LEASE_BATCH_SIZE,
-):
-    """SELECT of claimable rule ids, ordered most-overdue-first.
-
-    Postgres pushes the sticky-assignment predicate and ``FOR UPDATE SKIP LOCKED``
-    into the database so N workers share the queue without double-evaluating.
-    Neither ``hashtext`` nor ``SKIP LOCKED`` is portable, so every other dialect
-    gets an over-fetching select and filters with :func:`may_claim` in Python —
-    correct everywhere, and SQLite's single writer makes it equivalent there.
+    One query, one dialect. This used to fan rules across replicas -- ``hashtext``
+    sticky assignment and ``FOR UPDATE SKIP LOCKED`` on Postgres, an over-fetching
+    select filtered in Python everywhere else, and a lease column marking rules
+    in flight. Nothing else in MLflow coordinates background work that way: every
+    other periodic task settles for ``huey.lock_task`` and one consumer, which is
+    the deployment shape the product actually supports. Alerting now matches.
 
     ``next_evaluation_at_ms`` is materialized rather than computed:
     ``last_evaluated_ms + interval * 1000 <= now`` is arithmetic across two columns
@@ -558,121 +519,29 @@ def build_due_rule_query(
     from mlflow.store.tracking.dbmodels.models import SqlAlertRule
 
     table = SqlAlertRule.__table__
-    # The two scheduling columns come back so the non-Postgres path can apply the
-    # orphan release valve in Python; Postgres has it in the WHERE clause below,
-    # and reads only the first column.
-    query = sa.select(
-        table.c.alert_rule_id,
-        table.c.next_evaluation_at_ms,
-        table.c.evaluation_interval_seconds,
-    ).where(
-        table.c.enabled.is_(True),
-        table.c.deleted_at_ms.is_(None),
-        table.c.next_evaluation_at_ms <= now_ms,
-        sa.or_(
-            table.c.lease_expires_ms.is_(None),
-            table.c.lease_expires_ms < now_ms,
-        ),
+    return (
+        sa
+        .select(table.c.alert_rule_id)
+        .where(
+            table.c.enabled.is_(True),
+            table.c.deleted_at_ms.is_(None),
+            table.c.next_evaluation_at_ms <= now_ms,
+        )
+        # Most overdue first, so a rule that fell behind is not starved by the
+        # batch limit on every subsequent cycle.
+        .order_by(table.c.next_evaluation_at_ms)
+        .limit(limit)
     )
-    if dialect == "postgresql":
-        overdue = table.c.next_evaluation_at_ms < (
-            now_ms - 2 * table.c.evaluation_interval_seconds * 1000
-        )
-        # hashtext returns int4, and abs(-2147483648) overflows it, so the cast to
-        # bigint has to happen before abs() -- otherwise one rule id in 4 billion
-        # aborts the whole lease scan.
-        sticky = (
-            sa.func.mod(
-                sa.func.abs(sa.cast(sa.func.hashtext(table.c.alert_rule_id), sa.BigInteger)),
-                worker_count,
-            )
-            == worker_index
-        )
-        query = query.where(sa.or_(sticky, overdue))
-    query = query.order_by(table.c.next_evaluation_at_ms).limit(limit)
-    if dialect == "postgresql":
-        query = query.with_for_update(skip_locked=True)
-    return query
 
 
-def lease_due_rule_ids(
-    session,
-    worker_id: str,
-    now_ms: int,
-    *,
-    worker_count: int = 1,
-    worker_index: int = 0,
-    limit: int = DEFAULT_LEASE_BATCH_SIZE,
-    lease_duration_ms: int = DEFAULT_LEASE_DURATION_MS,
-) -> list[str]:
-    """Claim due rules for ``worker_id`` and return their ids.
+def due_rule_ids(session, now_ms: int, limit: int = DEFAULT_BATCH_SIZE) -> list[str]:
+    """Ids of the rules due now.
 
-    Wired up by the store layer; kept here because it is evaluation-side and
-    dialect-specific, which is exactly what ``abstract_store`` says does not belong
-    on the portable interface.
+    No claim step: ``alert-evaluator-lock`` serializes cycles within the process,
+    and a rule belongs to exactly one read group, so no two threads reach the same
+    rule. Concurrency beyond that is out of scope -- see :func:`build_due_rule_query`.
     """
-    import sqlalchemy as sa
-
-    from mlflow.store.tracking.dbmodels.models import SqlAlertRule
-
-    table = SqlAlertRule.__table__
-    dialect = session.bind.dialect.name
-    if dialect == "postgresql":
-        candidate_ids = list(
-            session
-            .execute(build_due_rule_query(dialect, now_ms, worker_count, worker_index, limit))
-            .scalars()
-            .all()
-        )
-        if not candidate_ids:
-            return []
-        # SKIP LOCKED already made the select exclusive, so one blanket UPDATE is
-        # safe and is one round-trip.
-        session.execute(
-            sa
-            .update(table)
-            .where(table.c.alert_rule_id.in_(candidate_ids))
-            .values(lease_owner=worker_id, lease_expires_ms=now_ms + lease_duration_ms)
-        )
-        return candidate_ids
-
-    # Over-fetch, then apply stickiness and the orphan release valve in Python.
-    rows = session.execute(
-        build_due_rule_query(dialect, now_ms, worker_count, worker_index, limit * worker_count)
-    ).all()
-    candidate_ids = []
-    for rule_id, next_at_ms, interval_seconds in rows:
-        # Both halves of `may_claim`. The orphan valve used to be dropped entirely
-        # on this path, and a worker whose own assignment was empty then claimed *any*
-        # due rule -- which in a lightly loaded deployment is the common case, so
-        # every worker reached for the same rules and evaluated them twice.
-        sticky = sticky_worker_index(rule_id, worker_count) == worker_index
-        if sticky or _orphaned(next_at_ms, interval_seconds, now_ms):
-            candidate_ids.append(rule_id)
-        if len(candidate_ids) >= limit:
-            break
-
-    # One conditional UPDATE per rule, keeping only the rules this call actually
-    # won. Without `SKIP LOCKED` the select holds nothing, so a blanket update
-    # would let two callers both "claim" the same rule and both evaluate it; the
-    # lease predicate in the WHERE makes the claim itself the atomic step.
-    claimed = []
-    for rule_id in candidate_ids:
-        result = session.execute(
-            sa
-            .update(table)
-            .where(
-                table.c.alert_rule_id == rule_id,
-                sa.or_(
-                    table.c.lease_expires_ms.is_(None),
-                    table.c.lease_expires_ms < now_ms,
-                ),
-            )
-            .values(lease_owner=worker_id, lease_expires_ms=now_ms + lease_duration_ms)
-        )
-        if result.rowcount:
-            claimed.append(rule_id)
-    return claimed
+    return list(session.execute(build_due_rule_query(now_ms, limit)).scalars().all())
 
 
 ###############################################################################
@@ -688,9 +557,7 @@ class AlertEvaluationStore(Protocol):
     has to grow.
     """
 
-    def lease_due_alert_rules(
-        self, worker_id: str, now_ms: int, worker_count: int, worker_index: int, limit: int
-    ) -> list[AlertRule]: ...
+    def due_alert_rules(self, now_ms: int, limit: int) -> list[AlertRule]: ...
 
     def get_open_alert_instance(self, alert_rule_id: str) -> AlertInstance | None:
         """The rule's PENDING or FIRED instance, if it has one.
@@ -711,14 +578,8 @@ class AlertEvaluationStore(Protocol):
         last_evaluated_ms: int,
         next_evaluation_at_ms: int,
         last_sample_count: int | None,
-        lease_owner: str | None = None,
     ) -> None:
-        """Persist the outcome and release the lease.
-
-        ``lease_owner`` scopes the write to the holder: a caller that lost the
-        claim race must not free the winner's lease, nor overwrite its next-due
-        time from a stale snapshot of the rule.
-        """
+        """Persist the outcome: when it ran, when it next runs, what it saw."""
         ...
 
 
@@ -754,21 +615,22 @@ class _GroupResult:
 
 
 class AlertEvaluator:
-    """One worker's evaluation loop, as a plain callable.
+    """The evaluation loop, as a plain callable.
 
     Args:
         reader: rollup source. ``FakeRollupReader`` in tests, the Timescale-backed
             reader in production; the evaluator cannot tell the difference.
         store: see :class:`AlertEvaluationStore`.
-        worker_id: lease owner string.
-        worker_count / worker_index: which rules this worker is assigned.
         verifier: consulted only when histogram bounds are ambiguous.
         cache: incremental merge cache; pass ``IncrementalMergeCache(enabled=False)``
             to force a full read every cycle.
         notifier: called after the instance is committed. Durability comes from
             that ordering, not from a delivery table.
+        batch_size: rules evaluated in one cycle.
         max_workers: threads to spread this cycle's read groups over. One means
-            no pool is created at all.
+            no pool is created at all. This is *within* the process -- see
+            ``MLFLOW_ALERT_EVALUATOR_THREADS`` -- and is unrelated to how rules
+            are selected.
     """
 
     def __init__(
@@ -776,35 +638,23 @@ class AlertEvaluator:
         reader: RollupReader,
         store: AlertEvaluationStore,
         *,
-        worker_id: str = "worker-0",
-        worker_count: int = 1,
-        worker_index: int = 0,
         verifier: RawValueVerifier | None = None,
         cache: IncrementalMergeCache | None = None,
         notifier: Callable[[AlertRule, AlertInstance], None] | None = None,
-        lease_batch_size: int = DEFAULT_LEASE_BATCH_SIZE,
+        batch_size: int = DEFAULT_BATCH_SIZE,
         max_workers: int = DEFAULT_MAX_WORKERS,
     ):
         self.reader = reader
         self.store = store
-        self.worker_id = worker_id
-        self.worker_count = worker_count
-        self.worker_index = worker_index
         self.verifier = verifier
         self.cache = cache if cache is not None else IncrementalMergeCache()
         self.notifier = notifier
-        self.lease_batch_size = lease_batch_size
+        self.batch_size = batch_size
         self.max_workers = max(1, max_workers)
 
     def run_once(self, now_ms: int | None = None) -> EvaluationCycle:
         now_ms = get_current_time_millis() if now_ms is None else now_ms
-        rules = self.store.lease_due_alert_rules(
-            worker_id=self.worker_id,
-            now_ms=now_ms,
-            worker_count=self.worker_count,
-            worker_index=self.worker_index,
-            limit=self.lease_batch_size,
-        )
+        rules = self.store.due_alert_rules(now_ms=now_ms, limit=self.batch_size)
         return self.evaluate_rules(rules, now_ms)
 
     def evaluate_rules(self, rules: list[AlertRule], now_ms: int) -> EvaluationCycle:
@@ -1010,7 +860,6 @@ class AlertEvaluator:
             last_evaluated_ms=now_ms,
             next_evaluation_at_ms=next_due_ms(rule, now_ms),
             last_sample_count=observation.sample_count,
-            lease_owner=self.worker_id,
         )
         return RuleEvaluation(
             rule=rule, observation=observation, transition=transition, decision=decision
