@@ -28,6 +28,7 @@ from mlflow.entities.trace_metrics import (
 
 if TYPE_CHECKING:
     from mlflow.entities import EvaluationDataset
+    from mlflow.genai.alerts.entities import AlertInstance, AlertRule
     from mlflow.genai.label_schemas.label_schemas import InputType, LabelSchema
     from mlflow.genai.review_queues import ReviewQueue, ReviewQueueItem
     from mlflow.genai.scorers.online.entities import (
@@ -2120,5 +2121,114 @@ class AbstractStore(MCPServerRegistryMixin, GatewayStoreMixin):
             MlflowException(RESOURCE_DOES_NOT_EXIST): if the queue or the
                 attached item doesn't exist.
             MlflowException(INVALID_PARAMETER_VALUE): on validation failure.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    ###########################################################################
+    # Alerting
+    #
+    # Evaluation-side operations (leasing due rules, sealing rollup buckets) are
+    # deliberately absent: they need dialect-specific SQL and only ever run
+    # in-process on the server, so they live on SqlAlchemyStore directly. What is
+    # here is exactly what a remote client needs, which is why RestStore must
+    # implement all of it -- omit that and the feature silently does not exist
+    # for anyone pointing at a tracking server.
+    ###########################################################################
+
+    @requires_sql_backend
+    def create_alert_rule(self, rule: "AlertRule") -> "AlertRule":
+        """Create an alert rule.
+
+        The caller is expected to have run validation against ``METRIC_CATALOGUE``
+        and to have snapped ``threshold`` to a histogram boundary. Implementations
+        must jitter ``next_evaluation_at_ms`` within one interval, or every rule
+        created together stampedes the same tick.
+
+        Raises:
+            MlflowException(RESOURCE_ALREADY_EXISTS): if the name is taken within
+                the experiment.
+            MlflowException(INVALID_PARAMETER_VALUE): on validation failure.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def get_alert_rule(self, alert_rule_id: str) -> "AlertRule":
+        """Fetch a single rule. Soft-deleted rules are not returned.
+
+        Raises:
+            MlflowException(RESOURCE_DOES_NOT_EXIST): if the rule doesn't exist.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def list_alert_rules(self, experiment_id: str) -> list["AlertRule"]:
+        """All non-deleted rules for an experiment."""
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def update_alert_rule(self, alert_rule_id: str, **updates: Any) -> "AlertRule":
+        """Patch a rule.
+
+        Editing is most likely *during* an incident, so implementations must apply
+        the open-instance rules: threshold and comparator changes leave the
+        instance open; changes to what is being measured (window, metric,
+        dimension) close it as ``system:rule_edited``; disabling closes it as
+        ``system:rule_disabled``. Any change that invalidates the evaluator's
+        cached running total must also bump the rule's ``last_updated_timestamp``
+        so the evaluator can detect it.
+
+        Raises:
+            MlflowException(RESOURCE_DOES_NOT_EXIST): if the rule doesn't exist.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def delete_alert_rule(self, alert_rule_id: str) -> None:
+        """Soft-delete a rule, leaving its instances readable.
+
+        A hard delete would erase the record of everything the rule ever caught --
+        exactly the history someone wants during a postmortem, destroyed by the
+        cleanup action most likely to precede one.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def list_alert_instances(
+        self,
+        experiment_id: str,
+        states: list[str] | None = None,
+        max_results: int = 100,
+    ) -> list["AlertInstance"]:
+        """Firing episodes for an experiment, most recent first.
+
+        ``states`` defaults to the undismissed ones (``PENDING``, ``FIRED``,
+        ``INACTIVE``), which is the active-alerts view; pass explicit states for
+        history. ``INACTIVE`` is there because it has recovered but has not been
+        acknowledged, so it is still someone's to look at.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def dismiss_alert_instance(self, alert_instance_id: str, dismissed_by: str) -> "AlertInstance":
+        """Acknowledge and close an instance, from any state including ``INACTIVE``.
+
+        Instances never remove themselves: a spike that recovered before anyone
+        looked still happened, so it goes ``INACTIVE`` rather than away, and
+        dismissal stays an explicit human acknowledgement.
+
+        Raises:
+            MlflowException(RESOURCE_DOES_NOT_EXIST): if the instance doesn't exist.
+        """
+        raise NotImplementedError(self.__class__.__name__)
+
+    @requires_sql_backend
+    def list_alert_dimension_values(
+        self, experiment_id: str, metric_key: str, dimension_key: str
+    ) -> list[str]:
+        """Observed values for a dimension, for the rule editor's dropdowns.
+
+        Judge names, tool names and exception types are open vocabularies -- users
+        can name a judge anything -- so these must be read from ``metric_series``
+        rather than hardcoded.
         """
         raise NotImplementedError(self.__class__.__name__)

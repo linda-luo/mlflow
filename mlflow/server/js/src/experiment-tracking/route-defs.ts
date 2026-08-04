@@ -183,6 +183,19 @@ const getExperimentPageRouteDefs = () => {
           } satisfies RouteHandle,
         },
         {
+          path: RoutePaths.experimentPageTabAlerts,
+          pageId: PageId.experimentPageTabAlerts,
+          element: createLazyRouteElement(() => import('./pages/experiment-alerts/AlertsPage')),
+          handle: {
+            getPageTitle: (params) => `Alerts - Experiment ${params['experimentId']}`,
+            getAssistantPrompts: () => [
+              'Which of my alerts are firing right now?',
+              'How do I alert on p95 latency?',
+              'Why is this alert showing "Not enough data"?',
+            ],
+          } satisfies RouteHandle,
+        },
+        {
           path: RoutePaths.experimentPageTabDatasets,
           pageId: PageId.experimentPageTabDatasets,
           element: createLazyRouteElement(() => {

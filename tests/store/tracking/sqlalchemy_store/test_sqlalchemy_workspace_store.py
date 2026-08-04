@@ -2838,3 +2838,159 @@ def test_review_queue_question_lock_holds_in_workspace_store(workspace_tracking_
             workspace_tracking_store.update_review_queue(queue.queue_id, schema_ids=[ls1.schema_id])
         updated = workspace_tracking_store.update_review_queue(queue.queue_id, users=["alice"])
         assert updated.users == ["alice"]
+
+
+def _alert_rule(experiment_id: str, name: str):
+    from mlflow.genai.alerts.entities import AlertRule
+
+    return AlertRule(
+        alert_rule_id="",
+        experiment_id=int(experiment_id),
+        name=name,
+        metric_key="latency",
+        dimension_key="TRACES",
+        aggregation="PERCENTILE",
+        percentile_value=95.0,
+        comparator="GT",
+        threshold=45 * 60_000,
+        window_seconds=3600,
+        evaluation_interval_seconds=300,
+    )
+
+
+def test_alert_rules_are_workspace_scoped(workspace_tracking_store):
+    with WorkspaceContext("team-a"):
+        exp_a_id = workspace_tracking_store.create_experiment("exp-a-alerts")
+        rule_a = workspace_tracking_store.create_alert_rule(_alert_rule(exp_a_id, "shared-name"))
+
+    with WorkspaceContext("team-b"):
+        exp_b_id = workspace_tracking_store.create_experiment("exp-b-alerts")
+        rule_b = workspace_tracking_store.create_alert_rule(_alert_rule(exp_b_id, "shared-name"))
+
+        assert [r.alert_rule_id for r in workspace_tracking_store.list_alert_rules(exp_b_id)] == [
+            rule_b.alert_rule_id
+        ]
+        # A rule id from another workspace must read as missing, not as a rule.
+        with pytest.raises(MlflowException, match="not found") as excinfo:
+            workspace_tracking_store.get_alert_rule(rule_a.alert_rule_id)
+        assert excinfo.value.error_code == "RESOURCE_DOES_NOT_EXIST"
+        with pytest.raises(MlflowException, match="not found"):
+            workspace_tracking_store.update_alert_rule(rule_a.alert_rule_id, threshold=1.0)
+        with pytest.raises(MlflowException, match="not found"):
+            workspace_tracking_store.delete_alert_rule(rule_a.alert_rule_id)
+
+    with WorkspaceContext("team-a"):
+        # Team A's rule is untouched by team B's attempts above.
+        assert workspace_tracking_store.get_alert_rule(rule_a.alert_rule_id).threshold == (
+            45 * 60_000
+        )
+        assert [r.alert_rule_id for r in workspace_tracking_store.list_alert_rules(exp_a_id)] == [
+            rule_a.alert_rule_id
+        ]
+
+
+def test_alert_instances_and_dimension_values_are_workspace_scoped(workspace_tracking_store):
+    import json
+
+    from mlflow.store.tracking.dbmodels.models import (
+        SqlAlertInstance,
+        SqlAssessments,
+        SqlTraceInfo,
+    )
+
+    now_ms = _now_ms()
+    with WorkspaceContext("team-a"):
+        exp_a_id = workspace_tracking_store.create_experiment("exp-a-instances")
+        rule_a = workspace_tracking_store.create_alert_rule(_alert_rule(exp_a_id, "rule-a"))
+        with workspace_tracking_store.ManagedSessionMaker(read_only=False) as session:
+            session.add(
+                SqlAlertInstance(
+                    alert_instance_id="inst-a",
+                    alert_rule_id=rule_a.alert_rule_id,
+                    experiment_id=int(exp_a_id),
+                    state="FIRED",
+                    started_at_ms=now_ms,
+                    window_start_ms=1,
+                    window_end_ms=2,
+                )
+            )
+            # A recovered-but-unacknowledged episode. It is in the default listing
+            # like any other undismissed instance, so it must be scoped like one.
+            session.add(
+                SqlAlertInstance(
+                    alert_instance_id="inst-a-inactive",
+                    alert_rule_id=rule_a.alert_rule_id,
+                    experiment_id=int(exp_a_id),
+                    state="INACTIVE",
+                    started_at_ms=now_ms - 60_000,
+                    window_start_ms=1,
+                    window_end_ms=2,
+                    healthy_since_ms=now_ms,
+                )
+            )
+            # Dimension values are read from the raw tables rather than from
+            # `metric_series`, so the scoping that matters is the one applied to
+            # these -- see `distinct_dimension_values`.
+            session.add(
+                SqlTraceInfo(
+                    request_id="tr-a",
+                    experiment_id=int(exp_a_id),
+                    timestamp_ms=now_ms - 61_000,
+                    execution_time_ms=1_000,
+                    end_time_ms=now_ms - 60_000,
+                    status="OK",
+                )
+            )
+            session.flush()
+            session.add(
+                SqlAssessments(
+                    assessment_id="asmt-a",
+                    trace_id="tr-a",
+                    name="safety",
+                    assessment_type="feedback",
+                    value=json.dumps(True),
+                    created_timestamp=now_ms - 60_000,
+                    last_updated_timestamp=now_ms - 60_000,
+                    source_type="LLM_JUDGE",
+                    valid=True,
+                    experiment_id=int(exp_a_id),
+                )
+            )
+
+    with WorkspaceContext("team-b"):
+        exp_b_id = workspace_tracking_store.create_experiment("exp-b-instances")
+        assert workspace_tracking_store.list_alert_instances(exp_b_id) == []
+        assert (
+            workspace_tracking_store.list_alert_dimension_values(
+                exp_b_id, "assessment_value", "ASSESSMENTS"
+            )
+            == []
+        )
+        # The leak that matters: asking for the *other* workspace's experiment by id
+        # must be refused, not answered. Querying an own-workspace experiment is
+        # empty for the uninteresting reason that nothing was written to it.
+        with pytest.raises(MlflowException, match="No Experiment with id"):
+            workspace_tracking_store.list_alert_dimension_values(
+                exp_a_id, "assessment_value", "ASSESSMENTS"
+            )
+        # Dismissal is scoped through the owning rule's experiment, whatever state
+        # the instance is in -- an INACTIVE one is still dismissible, just not by
+        # another workspace.
+        with pytest.raises(MlflowException, match="not found"):
+            workspace_tracking_store.dismiss_alert_instance("inst-a", "bob")
+        with pytest.raises(MlflowException, match="not found"):
+            workspace_tracking_store.dismiss_alert_instance("inst-a-inactive", "bob")
+
+    with WorkspaceContext("team-a"):
+        assert [
+            i.alert_instance_id for i in workspace_tracking_store.list_alert_instances(exp_a_id)
+        ] == ["inst-a", "inst-a-inactive"]
+        assert workspace_tracking_store.dismiss_alert_instance(
+            "inst-a-inactive", "alice"
+        ).state == ("DISMISSED")
+        assert workspace_tracking_store.list_alert_dimension_values(
+            exp_a_id, "assessment_value", "ASSESSMENTS"
+        ) == ["safety"]
+        assert workspace_tracking_store.dismiss_alert_instance("inst-a", "alice").state == (
+            "DISMISSED"
+        )

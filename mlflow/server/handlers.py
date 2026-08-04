@@ -1,4 +1,5 @@
 # Define all the service endpoint handlers here.
+import dataclasses
 import io
 import json
 import logging
@@ -416,6 +417,7 @@ from mlflow.webhooks.types import (
 
 _logger = logging.getLogger(__name__)
 _tracking_store = None
+_tracking_store_lock = threading.Lock()
 _model_registry_store = None
 _job_store = None
 _artifact_repo = None
@@ -673,12 +675,18 @@ def _get_tracking_store(
     from mlflow.server import ARTIFACT_ROOT_ENV_VAR, BACKEND_STORE_URI_ENV_VAR
 
     global _tracking_store
-    if _tracking_store is None:
-        store_uri = backend_store_uri or os.environ.get(BACKEND_STORE_URI_ENV_VAR, None)
-        artifact_root = default_artifact_root or os.environ.get(ARTIFACT_ROOT_ENV_VAR, None)
-        _tracking_store = _tracking_store_registry.get_store(store_uri, artifact_root)
-        utils.set_tracking_uri(store_uri)
-    return _tracking_store
+    if _tracking_store is not None:
+        return _tracking_store
+    # Double-checked: periodic tasks run on a thread pool, so an unguarded
+    # `if is None` lets two threads each build a store -- and therefore two
+    # connection pools, of which one is silently discarded.
+    with _tracking_store_lock:
+        if _tracking_store is None:
+            store_uri = backend_store_uri or os.environ.get(BACKEND_STORE_URI_ENV_VAR, None)
+            artifact_root = default_artifact_root or os.environ.get(ARTIFACT_ROOT_ENV_VAR, None)
+            _tracking_store = _tracking_store_registry.get_store(store_uri, artifact_root)
+            utils.set_tracking_uri(store_uri)
+        return _tracking_store
 
 
 def _get_model_registry_store(registry_store_uri: str | None = None) -> AbstractModelRegistryStore:
@@ -838,7 +846,10 @@ def _assert_string(x):
 def _assert_intlike(x):
     try:
         x = int(x)
-    except ValueError:
+    except (TypeError, ValueError):
+        # TypeError as well as ValueError: `int(None)` raises TypeError, and only
+        # AssertionError is caught upstream, so letting it escape turns a
+        # malformed request body into a 500 instead of a 400.
         pass
 
     assert isinstance(x, int)
@@ -848,10 +859,27 @@ def _assert_bool(x):
     assert isinstance(x, bool)
 
 
+def _nullable(assertion):
+    """Accept an explicit JSON null for a genuinely nullable field.
+
+    Omitting a key and clearing it are different intents, and a PATCH can only
+    express the second by sending null -- so without this, moving a rule off
+    PERCENTILE has no way to drop the percentile it no longer has.
+    """
+
+    def check(x):
+        if x is not None:
+            assertion(x)
+
+    return check
+
+
 def _assert_floatlike(x):
     try:
         x = float(x)
-    except ValueError:
+    except (TypeError, ValueError):
+        # See `_assert_intlike`: `float(None)` raises TypeError, which would
+        # otherwise escape as a 500.
         pass
 
     assert isinstance(x, float)
@@ -6977,6 +7005,7 @@ def get_endpoints(get_handler=get_handler):
     return (
         get_service_endpoints(MlflowService, get_handler)
         + get_internal_online_scoring_endpoints()
+        + get_alert_endpoints()
         + get_service_endpoints(ModelRegistryService, get_handler)
         + get_service_endpoints(MlflowArtifactsService, get_handler)
         + get_service_endpoints(WebhookService, get_handler)
@@ -7164,6 +7193,284 @@ def _delete_demo():
         "status": "deleted",
         "features_deleted": deleted_features,
     })
+
+
+# Alerting APIs
+#
+# Hand-rolled JSON rather than protobuf RPCs: proto regeneration needs Docker and
+# is the productionization step for this feature. Every path is registered at both
+# `/api/3.0` (Python clients, i.e. RestStore) and `/ajax-api/3.0` (the React app).
+
+
+_ALERTS_BASE_PATH = "/mlflow/alerts"
+
+
+def get_alert_endpoints():
+    """Returns endpoint tuples for the alerting APIs.
+
+    ``_get_paths`` yields both the ``/api/3.0`` and ``/ajax-api/3.0`` form of every
+    path, so the same handler serves the React app and RestStore.
+    """
+    routes = (
+        ("/rules", _create_alert_rule, ["POST"]),
+        ("/rules", _list_alert_rules, ["GET"]),
+        ("/rules/<alert_rule_id>", _get_alert_rule, ["GET"]),
+        ("/rules/<alert_rule_id>", _update_alert_rule, ["PATCH"]),
+        ("/rules/<alert_rule_id>", _delete_alert_rule, ["DELETE"]),
+        ("/instances", _list_alert_instances, ["GET"]),
+        ("/instances/<alert_instance_id>/dismiss", _dismiss_alert_instance, ["POST"]),
+        ("/dimension-values", _list_alert_dimension_values, ["GET"]),
+        ("/series", _get_alert_rule_series, ["GET"]),
+    )
+    return [
+        (path, handler, methods)
+        for suffix, handler, methods in routes
+        for path in _get_paths(f"{_ALERTS_BASE_PATH}{suffix}", version=3)
+    ]
+
+
+def _alert_rule_response(rule):
+    return jsonify({"alert_rule": dataclasses.asdict(rule)})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _create_alert_rule():
+    from mlflow.genai.alerts.entities import (
+        AlertRule,
+        derive_evaluation_interval_seconds,
+        derive_min_sample_count,
+    )
+
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={
+            "experiment_id": [_assert_required, _assert_string],
+            "name": [_assert_required, _assert_string],
+            "metric_key": [_assert_required, _assert_string],
+            "dimension_key": [_assert_required, _assert_string],
+            "aggregation": [_assert_required, _assert_string],
+            "comparator": [_assert_required, _assert_string],
+            "threshold": [_assert_required, _assert_floatlike],
+            "window_seconds": [_assert_required, _assert_intlike],
+            # Nullable, matching the patch schema and the columns themselves. A
+            # client that sends `null` rather than omitting the key means the same
+            # thing, and rejecting one spelling produced an error naming the wrong
+            # field entirely.
+            "dimension_value": [_nullable(_assert_string)],
+            "percentile_value": [_nullable(_assert_floatlike)],
+            "sustain_seconds": [_assert_intlike],
+            "min_sample_count": [_assert_intlike],
+            "severity": [_assert_string],
+            "description": [_nullable(_assert_string)],
+            "enabled": [_assert_bool],
+            "channels": [_assert_array],
+        },
+    )
+    window_seconds = int(request_json["window_seconds"])
+    percentile_value = request_json.get("percentile_value")
+    try:
+        experiment_id = int(request_json["experiment_id"])
+    except ValueError as e:
+        raise MlflowException.invalid_parameter_value(
+            f"Invalid experiment ID: {request_json['experiment_id']}"
+        ) from e
+    rule = AlertRule(
+        # The store assigns the id; `alert_rule_id` is a required positional on
+        # the dataclass, so it is passed empty rather than omitted.
+        alert_rule_id="",
+        experiment_id=experiment_id,
+        name=request_json["name"],
+        metric_key=request_json["metric_key"],
+        dimension_key=request_json["dimension_key"],
+        aggregation=request_json["aggregation"],
+        comparator=request_json["comparator"],
+        threshold=float(request_json["threshold"]),
+        window_seconds=window_seconds,
+        # Derived server-side: the client never supplies the interval.
+        evaluation_interval_seconds=derive_evaluation_interval_seconds(window_seconds),
+        dimension_value=request_json.get("dimension_value") or None,
+        percentile_value=float(percentile_value) if percentile_value is not None else None,
+        sustain_seconds=int(request_json.get("sustain_seconds") or 0),
+        # Omitting the field asks for the statistical suggestion; sending a number
+        # -- including 0 -- means it. The two have to stay distinguishable, so this
+        # reads the key's presence rather than its truthiness.
+        min_sample_count=(
+            int(request_json["min_sample_count"])
+            if request_json.get("min_sample_count") is not None
+            else derive_min_sample_count(
+                request_json["aggregation"],
+                float(percentile_value) if percentile_value is not None else None,
+            )
+        ),
+        severity=request_json.get("severity") or "MEDIUM",
+        enabled=request_json.get("enabled", True),
+        description=request_json.get("description") or None,
+        channels=request_json.get("channels") or [],
+        created_by=_get_request_username(),
+    )
+    return _alert_rule_response(_get_tracking_store().create_alert_rule(rule))
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _get_alert_rule(alert_rule_id):
+    return _alert_rule_response(_get_tracking_store().get_alert_rule(alert_rule_id))
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _list_alert_rules():
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={"experiment_id": [_assert_required, _assert_string]},
+    )
+    rules = _get_tracking_store().list_alert_rules(request_json["experiment_id"])
+    return jsonify({"alert_rules": [dataclasses.asdict(r) for r in rules]})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _update_alert_rule(alert_rule_id):
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={
+            "name": [_assert_string],
+            "description": [_nullable(_assert_string)],
+            "severity": [_assert_string],
+            "enabled": [_assert_bool],
+            "metric_key": [_assert_string],
+            "dimension_key": [_assert_string],
+            # Updatable by the store, so it has to be typed here too: the handler
+            # copies the raw body through, and an omitted key is not stripped --
+            # it simply reaches the store unvalidated.
+            "dimension_value": [_nullable(_assert_string)],
+            "aggregation": [_assert_string],
+            "comparator": [_assert_string],
+            "threshold": [_assert_floatlike],
+            "window_seconds": [_assert_intlike],
+            "sustain_seconds": [_assert_intlike],
+            "min_sample_count": [_assert_intlike],
+            # Nullable so a rule moving off PERCENTILE can drop the percentile it
+            # no longer has.
+            "percentile_value": [_nullable(_assert_floatlike)],
+            "channels": [_assert_array],
+        },
+    )
+    updates = dict(request_json)
+    if "dimension_value" in updates:
+        # Same normalization as create, so "unscoped" is one value in the column
+        # rather than two: create stores NULL and a patch used to store "".
+        updates["dimension_value"] = updates["dimension_value"] or None
+    for key in ("window_seconds", "sustain_seconds", "min_sample_count"):
+        if key in updates and updates[key] is not None:
+            updates[key] = int(updates[key])
+    for key in ("threshold", "percentile_value"):
+        if key in updates and updates[key] is not None:
+            updates[key] = float(updates[key])
+    rule = _get_tracking_store().update_alert_rule(alert_rule_id, **updates)
+    return _alert_rule_response(rule)
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _delete_alert_rule(alert_rule_id):
+    _get_tracking_store().delete_alert_rule(alert_rule_id)
+    return jsonify({})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _list_alert_instances():
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={
+            "experiment_id": [_assert_required, _assert_string],
+            "states": [_assert_array, _assert_item_type_string],
+            "max_results": [_assert_intlike],
+        },
+    )
+    max_results = request_json.get("max_results")
+    instances = _get_tracking_store().list_alert_instances(
+        request_json["experiment_id"],
+        states=request_json.get("states") or None,
+        max_results=int(max_results) if max_results is not None else 100,
+    )
+    return jsonify({"alert_instances": [dataclasses.asdict(i) for i in instances]})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _dismiss_alert_instance(alert_instance_id):
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={"dismissed_by": [_assert_string]},
+    )
+    # Dismissal is an acknowledgement by a person, so the authenticated user
+    # wins over anything the client sends.
+    dismissed_by = _get_request_username() or request_json.get("dismissed_by") or "unknown"
+    instance = _get_tracking_store().dismiss_alert_instance(alert_instance_id, dismissed_by)
+    return jsonify({"alert_instance": dataclasses.asdict(instance)})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _list_alert_dimension_values():
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={
+            "experiment_id": [_assert_required, _assert_string],
+            "metric": [_assert_required, _assert_string],
+            "dimension_key": [_assert_required, _assert_string],
+        },
+    )
+    values = _get_tracking_store().list_alert_dimension_values(
+        request_json["experiment_id"],
+        request_json["metric"],
+        request_json["dimension_key"],
+    )
+    return jsonify({"dimension_values": values})
+
+
+@catch_mlflow_exception
+@_disable_if_artifacts_only
+def _get_alert_rule_series():
+    """The rule's metric over a range, as the rule itself measured it.
+
+    Each point is a rolling ``window_seconds`` projection rather than a per-bucket
+    value, so the line and the alert cannot disagree about when the threshold was
+    crossed -- see ``mlflow.genai.alerts.series``.
+    """
+    from mlflow.genai.alerts.series import compute_rule_series
+    from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
+
+    request_json = _get_validated_flask_request_json(
+        flask_request=request,
+        schema={
+            "alert_rule_id": [_assert_required, _assert_string],
+            "start_ms": [_assert_required, _assert_intlike],
+            "end_ms": [_assert_required, _assert_intlike],
+        },
+    )
+    store = _get_tracking_store()
+    rule = store.get_alert_rule(request_json["alert_rule_id"])
+    start_ms = int(request_json["start_ms"])
+    end_ms = int(request_json["end_ms"])
+    if end_ms < start_ms:
+        raise MlflowException(
+            f"`end_ms` ({end_ms}) precedes `start_ms` ({start_ms}).",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+
+    series = compute_rule_series(SqlRollupReader(store), rule, start_ms, end_ms)
+    return jsonify(
+        {
+            "points": [dataclasses.asdict(p) for p in series.points],
+            "threshold": series.threshold,
+            "window_seconds": series.window_seconds,
+            "step_seconds": series.step_seconds,
+        }
+    )
 
 
 def get_internal_online_scoring_endpoints():

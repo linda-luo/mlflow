@@ -160,6 +160,7 @@ export enum ExperimentPageTabName {
   LabelingSessions = 'labeling-sessions',
   LabelingSchemas = 'label-schemas',
   ReviewQueue = 'review-queue',
+  Alerts = 'alerts',
   Prompts = 'prompts',
   ChatSessions = 'chat-sessions',
   SingleChatSession = 'single-chat-session',

@@ -13,6 +13,7 @@ import {
   GavelIcon,
   ListIcon,
   ModelsIcon,
+  NotificationIcon,
   PlayIcon,
   PlusMinusSquareIcon,
   SpeechBubbleIcon,
@@ -67,6 +68,8 @@ export const getTabDisplayIcon = (tabName: ExperimentPageTabName | undefined) =>
       return <TextBoxIcon />;
     case ExperimentPageTabName.ReviewQueue:
       return <UserGroupIcon />;
+    case ExperimentPageTabName.Alerts:
+      return <NotificationIcon />;
     default:
       return <BeakerIcon />;
   }
@@ -192,6 +195,13 @@ const getMLTabDisplayName = (tabName: ExperimentPageTabName) => {
         <FormattedMessage
           defaultMessage="Review"
           description="Label for the review tab in the MLflow experiment navbar"
+        />
+      );
+    case ExperimentPageTabName.Alerts:
+      return (
+        <FormattedMessage
+          defaultMessage="Alerts"
+          description="Label for the alerts tab in the MLflow experiment navbar"
         />
       );
     default:
