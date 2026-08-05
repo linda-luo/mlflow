@@ -41,7 +41,7 @@ from mlflow.utils.time import get_current_time_millis
 
 _logger = logging.getLogger(__name__)
 
-DEFAULT_BATCH_SIZE = 50
+DEFAULT_BATCH_SIZE = 500
 """Rules evaluated in one cycle. A bound on the cycle, not a claim."""
 DEFAULT_MAX_WORKERS = 1
 """Evaluator threads per process. One unless a deployment opts in.
