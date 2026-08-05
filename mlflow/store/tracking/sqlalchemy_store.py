@@ -9465,7 +9465,6 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             alert_rule_id=rule.alert_rule_id or uuid.uuid4().hex,
             experiment_id=int(rule.experiment_id),
             name=rule.name,
-            description=rule.description,
             severity=rule.severity,
             enabled=bool(rule.enabled),
             metric_key=rule.metric_key,
@@ -10003,7 +10002,6 @@ disable or delete closes. Mirrors ``ACTIVE_STATES`` in ``state_machine``."""
 
 _ALERT_RULE_UPDATABLE_FIELDS = frozenset({
     "name",
-    "description",
     "severity",
     "enabled",
     "metric_key",
@@ -10168,7 +10166,6 @@ def _sql_alert_rule_to_entity(sql_rule):
         min_sample_count=sql_rule.min_sample_count,
         severity=sql_rule.severity,
         enabled=bool(sql_rule.enabled),
-        description=sql_rule.description,
         last_evaluated_ms=sql_rule.last_evaluated_ms,
         next_evaluation_at_ms=sql_rule.next_evaluation_at_ms,
         last_sample_count=sql_rule.last_sample_count,

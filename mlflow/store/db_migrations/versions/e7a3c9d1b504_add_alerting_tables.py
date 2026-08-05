@@ -5,7 +5,7 @@ Creates the alerting schema in a single revision:
 * ``span_errors``   -- deduped exception rows written in the ingest path
 * ``metric_series`` -- rollup series identity, factored out of the bucket rows
 * ``metric_rollups``-- sealed 1-minute buckets (a Timescale hypertable on Postgres)
-* ``rollup_state``  -- aggregation watermark per (source, dimension_key, metric_key)
+* ``rollup_state``  -- aggregation watermark per (source, dimension_key)
 * ``alert_rules``   -- a saved metric query plus a predicate
 * ``alert_instances`` -- one firing episode each
 
@@ -135,7 +135,6 @@ def upgrade():
         sa.Column("alert_rule_id", sa.String(36), nullable=False),
         sa.Column("experiment_id", sa.Integer(), nullable=False),
         sa.Column("name", sa.String(256), nullable=False),
-        sa.Column("description", sa.String(1000), nullable=True),
         sa.Column("severity", sa.String(10), nullable=False, server_default="MEDIUM"),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("metric_key", sa.String(250), nullable=False),

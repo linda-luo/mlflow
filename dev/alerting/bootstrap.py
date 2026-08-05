@@ -62,7 +62,6 @@ def main():
             metric_key="latency", dimension_key="TRACES", aggregation="PERCENTILE",
             percentile_value=95, comparator="GT", threshold=30 * MINUTE_MS,
             severity="HIGH", sustain_seconds=120, window_seconds=600,
-            description="Customers wait too long for an order confirmation.",
         ),
         rule(
             experiment_id, "Average latency regression",
@@ -86,7 +85,6 @@ def main():
             experiment_id, "Traffic dropped",
             metric_key="latency", dimension_key="TRACES", aggregation="COUNT",
             comparator="LT", threshold=5, severity="LOW", window_seconds=600,
-            description="Absence is a signal too: nobody is calling the agent.",
         ),
     ]
     for r in rules:

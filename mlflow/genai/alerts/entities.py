@@ -322,7 +322,6 @@ class AlertRule:
     """
     severity: str = "MEDIUM"
     enabled: bool = True
-    description: str | None = None
     last_evaluated_ms: int | None = None
     next_evaluation_at_ms: int | None = None
     last_sample_count: int | None = None

@@ -56,7 +56,7 @@ export interface AlertRule {
   min_sample_count: number;
   severity: AlertSeverity;
   enabled: boolean;
-  description?: string | null;
+  channels?: AlertChannel[];
   last_evaluated_ms?: number | null;
   next_evaluation_at_ms?: number | null;
   /** How many samples the last evaluation saw. Drives the "not enough data" status. */
@@ -108,7 +108,21 @@ export interface CreateAlertRuleRequest {
   /** Omit to accept the server's suggestion; send 0 to mean "no minimum". */
   min_sample_count?: number;
   severity?: AlertSeverity;
-  description?: string;
+  /**
+   * Where the alert goes, beyond the in-app list. Preview.
+   *
+   * Free-form on the wire: the server stores it as JSON and only resolves a
+   * `type` against the channel registry when the alert fires. A type nothing has
+   * registered is accepted here and silently fails to deliver, which is why the
+   * editor labels this preview rather than offering it as a finished feature.
+   */
+  channels?: AlertChannel[];
+}
+
+/** One notification target. `type` must match a registered channel. */
+export interface AlertChannel {
+  type: string;
+  target?: string;
 }
 
 /**
@@ -140,7 +154,8 @@ export interface UpdateAlertRuleRequest {
   min_sample_count?: number;
   severity?: AlertSeverity;
   enabled?: boolean;
-  description?: string;
+  /** Send `[]` to clear; the server stores null for an empty list. */
+  channels?: AlertChannel[];
 }
 
 export type AlertThresholdUnit =

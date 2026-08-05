@@ -242,7 +242,7 @@ def test_patching_the_sample_floor_stops_it_being_re_derived(client, experiment_
     assert kept["min_sample_count"] == 25
 
 
-@pytest.mark.parametrize("field", ["percentile_value", "dimension_value", "description"])
+@pytest.mark.parametrize("field", ["percentile_value", "dimension_value"])
 def test_create_accepts_an_explicit_null_for_a_nullable_field(client, experiment_id, field):
     """Sending null and omitting the key mean the same thing.
 

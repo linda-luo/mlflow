@@ -8,6 +8,7 @@ import {
   Modal,
   SimpleSelect,
   SimpleSelectOption,
+  Tag,
   Typography,
   useDesignSystemTheme,
 } from '@databricks/design-system';
@@ -35,6 +36,7 @@ import {
 } from './types';
 import type {
   AlertAggregation,
+  AlertChannel,
   AlertComparator,
   AlertDimensionKey,
   AlertMetricKey,
@@ -113,6 +115,7 @@ const initialFormState = (rule?: AlertRule) => {
     // An existing rule's own number, whatever it is; a new rule starts at the
     // statistical suggestion for its percentile.
     minSamples: String(rule?.min_sample_count ?? deriveMinSampleCount(aggregation, rule?.percentile_value ?? 95)),
+    channels: rule?.channels ?? [],
   };
 };
 
@@ -171,6 +174,7 @@ export const CreateAlertModal = ({
   const [windowAmount, setWindowAmount] = useState(initial.windowAmount);
   const [windowUnit, setWindowUnit] = useState<WindowUnit>(initial.windowUnit);
   const [sustainMinutes, setSustainMinutes] = useState(initial.sustainMinutes);
+  const [channels, setChannels] = useState<AlertChannel[]>(initial.channels);
   const [minSamples, setMinSamples] = useState(initial.minSamples);
   // Until the user takes ownership of the minimum, the field tracks the
   // suggestion as the percentile changes -- moving p95 to p99 should move the
@@ -319,6 +323,8 @@ export const CreateAlertModal = ({
             dimension_value: dimensionValue,
             // Cleared rather than left stale when a rule leaves PERCENTILE.
             percentile_value: isPercentile ? percentileValue : null,
+            // Empty list rather than undefined, so clearing a channel persists.
+            channels: channels.filter((c) => c.type.trim()),
             sustain_seconds: sustainSeconds,
             // Always sent, which is also what stops the store re-deriving it
             // behind the user's back when the aggregation changes.
@@ -338,6 +344,8 @@ export const CreateAlertModal = ({
           window_seconds: windowSeconds,
           dimension_value: dimensionValue || undefined,
           percentile_value: isPercentile ? percentileValue : undefined,
+          // Empty list rather than undefined, so clearing a channel persists.
+          channels: channels.filter((c) => c.type.trim()),
           sustain_seconds: sustainSeconds,
           min_sample_count: minSampleCount,
           severity,
@@ -791,6 +799,90 @@ export const CreateAlertModal = ({
         {/* Scope is always visible. A filter hidden inside a rule is worse than
             a prescriptive dropdown, because nothing on screen says what the
             number actually covers. */}
+        {/* Preview: the wire format and the registry are real, but nothing
+            validates a channel type on the way in -- an unregistered type is
+            accepted here and only fails, silently, when the alert fires. Hence
+            the tag, and hence the hint below rather than a picker that would
+            imply a supported set. */}
+        <div css={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.sm }}>
+          <div css={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+            {/* No htmlFor: this heads a repeating group, and the rows it labels
+                do not exist until the user adds one. Same as "Measure" above. */}
+            <FormUI.Label>
+              <FormattedMessage
+                defaultMessage="Notify elsewhere"
+                description="Create alert rule: optional external notification channels"
+              />
+            </FormUI.Label>
+            <Tag componentId={`${CID}.channels-preview`} color="turquoise">
+              <FormattedMessage
+                defaultMessage="Preview"
+                description="Create alert rule: the channels field is not a finished feature"
+              />
+            </Tag>
+          </div>
+
+          {channels.map((channel, index) => (
+            // eslint-disable-next-line react/no-array-index-key -- rows are positional
+            <div key={index} css={{ display: 'flex', gap: theme.spacing.sm }}>
+              <Input
+                componentId={`${CID}.channel-type`}
+                id={`${CID}.channel-type-${index}`}
+                css={{ flex: 1 }}
+                value={channel.type}
+                placeholder={intl.formatMessage({
+                  defaultMessage: 'channel type, e.g. slack',
+                  description: 'Create alert rule: channel type placeholder',
+                })}
+                onChange={(e) =>
+                  setChannels(channels.map((c, i) => (i === index ? { ...c, type: e.target.value } : c)))
+                }
+              />
+              <Input
+                componentId={`${CID}.channel-target`}
+                id={`${CID}.channel-target-${index}`}
+                css={{ flex: 2 }}
+                value={channel.target ?? ''}
+                placeholder={intl.formatMessage({
+                  defaultMessage: 'target — webhook URL, address, room…',
+                  description: 'Create alert rule: channel target placeholder',
+                })}
+                onChange={(e) =>
+                  setChannels(channels.map((c, i) => (i === index ? { ...c, target: e.target.value } : c)))
+                }
+              />
+              <Button
+                componentId={`${CID}.channel-remove`}
+                onClick={() => setChannels(channels.filter((_, i) => i !== index))}
+              >
+                <FormattedMessage
+                  defaultMessage="Remove"
+                  description="Create alert rule: remove a notification channel"
+                />
+              </Button>
+            </div>
+          ))}
+
+          <div>
+            <Button
+              componentId={`${CID}.channel-add`}
+              onClick={() => setChannels([...channels, { type: '', target: '' }])}
+            >
+              <FormattedMessage
+                defaultMessage="Add channel"
+                description="Create alert rule: add a notification channel"
+              />
+            </Button>
+          </div>
+
+          <FormUI.Hint>
+            <FormattedMessage
+              defaultMessage="The alert always appears in this list. A channel sends it somewhere else too, and only works if a plugin has registered that type — an unrecognised one is saved but never delivers."
+              description="Create alert rule: what notification channels do and their limitation"
+            />
+          </FormUI.Hint>
+        </div>
+
         <Alert
           componentId={`${CID}.scope`}
           type="info"

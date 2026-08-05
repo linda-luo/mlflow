@@ -151,6 +151,9 @@ experiment_id = (
 rule_name = "$rule_name"
 rule = next((r for r in store.list_alert_rules(experiment_id) if r.name == rule_name), None)
 if rule is None:
+    # Subscribes this experiment to TRACES/latency, so the aggregator writes rollups
+    # for it at all, and always breaches (threshold=-1) so the harness can compare a
+    # fired instance's observed_value against the raw rows.
     window_seconds = 300
     rule = store.create_alert_rule(AlertRule(
         alert_rule_id=str(uuid.uuid4()),
@@ -164,12 +167,6 @@ if rule is None:
         window_seconds=window_seconds,
         evaluation_interval_seconds=derive_evaluation_interval_seconds(window_seconds),
         severity="LOW",
-        description=(
-            "Created by dev/alerting/load_test/run.py. Subscribes this experiment to "
-            "TRACES/latency (so the aggregator writes rollups for it) and always "
-            "breaches (threshold=-1) so the harness can compare a fired instance's "
-            "observed_value against the raw rows."
-        ),
     ))
 
 print(json.dumps({
@@ -231,7 +228,7 @@ store = SqlAlchemyStore(os.environ["MLFLOW_BACKEND_STORE_URI"], "file:///tmp/mlf
 now_ms = int(time.time() * 1000)
 sealable_max_ms = sealable_max_bucket_ms(now_ms)
 with store.ManagedSessionMaker(read_only=True) as session:
-    row = session.get(SqlRollupState, ("trace_info", "TRACES", "latency"))
+    row = session.get(SqlRollupState, ("trace_info", "TRACES"))
     watermark_ms = row.watermark_ms if row is not None else None
 
 print(json.dumps({

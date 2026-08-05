@@ -7262,7 +7262,6 @@ def _create_alert_rule():
             "sustain_seconds": [_assert_intlike],
             "min_sample_count": [_assert_intlike],
             "severity": [_assert_string],
-            "description": [_nullable(_assert_string)],
             "enabled": [_assert_bool],
             "channels": [_assert_array],
         },
@@ -7305,7 +7304,6 @@ def _create_alert_rule():
         ),
         severity=request_json.get("severity") or "MEDIUM",
         enabled=request_json.get("enabled", True),
-        description=request_json.get("description") or None,
         channels=request_json.get("channels") or [],
         created_by=_get_request_username(),
     )
@@ -7336,7 +7334,6 @@ def _update_alert_rule(alert_rule_id):
         flask_request=request,
         schema={
             "name": [_assert_string],
-            "description": [_nullable(_assert_string)],
             "severity": [_assert_string],
             "enabled": [_assert_bool],
             "metric_key": [_assert_string],
@@ -7463,14 +7460,12 @@ def _get_alert_rule_series():
         )
 
     series = compute_rule_series(SqlRollupReader(store), rule, start_ms, end_ms)
-    return jsonify(
-        {
-            "points": [dataclasses.asdict(p) for p in series.points],
-            "threshold": series.threshold,
-            "window_seconds": series.window_seconds,
-            "step_seconds": series.step_seconds,
-        }
-    )
+    return jsonify({
+        "points": [dataclasses.asdict(p) for p in series.points],
+        "threshold": series.threshold,
+        "window_seconds": series.window_seconds,
+        "step_seconds": series.step_seconds,
+    })
 
 
 def get_internal_online_scoring_endpoints():

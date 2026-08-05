@@ -4588,7 +4588,6 @@ class SqlAlertRule(Base):
         Integer, ForeignKey("experiments.experiment_id", ondelete="CASCADE"), nullable=False
     )
     name = Column(String(256), nullable=False)
-    description = Column(String(1000), nullable=True)
     severity = Column(String(10), nullable=False, default="MEDIUM")
     enabled = Column(Boolean, nullable=False, default=True)
 

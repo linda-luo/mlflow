@@ -523,6 +523,10 @@
     "defaultMessage": "Staging",
     "description": "Column title for staging phase version in the registered model page"
   },
+  "0AvjdH": {
+    "defaultMessage": "Add channel",
+    "description": "Create alert rule: add a notification channel"
+  },
   "0BIVHk": {
     "defaultMessage": "Response follows instructions, constraints, policies, and formatting",
     "description": "Issue category description for adherence"
@@ -2907,6 +2911,10 @@
     "defaultMessage": "e.g. get_weather",
     "description": "Placeholder for the tool function name input in the playground Tools card"
   },
+  "ALdX5J": {
+    "defaultMessage": "channel type, e.g. slack",
+    "description": "Create alert rule: channel type placeholder"
+  },
   "AM8DuO": {
     "defaultMessage": "Failed",
     "description": "Run page > Overview > Run status cell > Value for failed state"
@@ -3002,6 +3010,10 @@
   "AmLGSf": {
     "defaultMessage": "Apply filters",
     "description": "Usage overview > apply filters button"
+  },
+  "AnRppa": {
+    "defaultMessage": "target — webhook URL, address, room…",
+    "description": "Create alert rule: channel target placeholder"
   },
   "AqmDon": {
     "defaultMessage": "No custom LLM-as-a-judge scorers found",
@@ -5739,6 +5751,10 @@
     "defaultMessage": "Create",
     "description": "Create review question button"
   },
+  "MhGSRO": {
+    "defaultMessage": "The alert always appears in this list. A channel sends it somewhere else too, and only works if a plugin has registered that type — an unrecognised one is saved but never delivers.",
+    "description": "Create alert rule: what notification channels do and their limitation"
+  },
   "MhOmZG": {
     "defaultMessage": "Yes",
     "description": "Label for an assessment with a 'yes' value"
@@ -7318,6 +7334,10 @@
   "TTXfdj": {
     "defaultMessage": "Commit message (optional)",
     "description": "Label for the optional commit-message input in the playground save-prompt-version modal"
+  },
+  "TVRExO": {
+    "defaultMessage": "Preview",
+    "description": "Create alert rule: the channels field is not a finished feature"
   },
   "TWnsnV": {
     "defaultMessage": "Run Name",
@@ -11507,6 +11527,10 @@
     "defaultMessage": "Last used",
     "description": "Badge for last used workspace"
   },
+  "k3HTdM": {
+    "defaultMessage": "Remove",
+    "description": "Create alert rule: remove a notification channel"
+  },
   "k4F8aJ": {
     "defaultMessage": "Copy issue ID",
     "description": "Tooltip to copy issue ID"
@@ -11958,6 +11982,10 @@
   "lyNyOH": {
     "defaultMessage": "Default queue",
     "description": "Add to review queue: the experiment default queue option"
+  },
+  "m/Tgfz": {
+    "defaultMessage": "Notify elsewhere",
+    "description": "Create alert rule: optional external notification channels"
   },
   "m1Nb7W": {
     "defaultMessage": "Save",
