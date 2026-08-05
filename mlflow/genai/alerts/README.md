@@ -80,9 +80,9 @@ chart and the trace IDs captured when the alert fired.
 
 **TimescaleDB is an optional cold-cache optimization.** When the evaluator has to
 rebuild a whole window from scratch, it reads 1-hour rollups for the whole hours
-inside that window instead of every 1-minute bucket — a 24-hour read drops from
-1,440 rows to about 83. The system works as-is without it on plain Postgres; hosts
-can add it for faster cold starts.
+inside that window, so a 24-hour read no longer has to pull 1,440 single-minute
+rows. The system works as-is without it on plain Postgres; hosts can add it for
+faster cold starts.
 
 ## Build
 

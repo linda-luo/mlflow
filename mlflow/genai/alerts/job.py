@@ -55,8 +55,8 @@ def _get_evaluator() -> AlertEvaluator:
     """One long-lived evaluator per process.
 
     The incremental-merge cache is this object's state, so rebuilding it every
-    tick would silently discard the optimization sticky assignment exists to
-    protect -- a 24h rule would go back to reading 1,440 buckets a cycle.
+    tick would silently discard the optimization it exists to provide -- a 24h
+    rule would go back to reading 1,440 buckets a cycle.
 
     Built under a lock because the unguarded ``if _evaluator is None`` let two
     threads each build one, and the loser's cache -- along with everything it had

@@ -9489,7 +9489,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             # that reaches back before the rule existed.
             #
             # `coverage_start_ms` is meant to be the guard for this, but it is keyed
-            # per family -- `(source, dimension_key, metric_key)`, no experiment --
+            # per family -- `(source, dimension_key)`, no experiment --
             # while rows are written per `(experiment, family)`. So when an
             # experiment gains its *first* rule for a family, coverage says "covered
             # since this server started" although not one row was ever written for

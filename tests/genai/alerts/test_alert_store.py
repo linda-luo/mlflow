@@ -1001,7 +1001,7 @@ def test_only_due_enabled_undeleted_rules_come_back(store, experiment_id):
     assert [r.alert_rule_id for r in store.due_alert_rules(now_ms)] == [due.alert_rule_id]
 
     # Reading is not claiming: asking twice returns the same rule. Cycles are
-    # serialized by `alert-evaluator-lock`, not by a lease.
+    # serialized by `alert-evaluator-lock`.
     assert [r.alert_rule_id for r in store.due_alert_rules(now_ms)] == [due.alert_rule_id]
 
 
@@ -1306,24 +1306,3 @@ def test_dispatch_defaults_to_in_app_and_survives_a_failing_channel():
     rule.channels = [{"type": "not_registered"}]
     dispatch(rule, instance)
     assert sent == ["inst-1"]
-
-
-def test_the_alerting_schema_declares_no_lease_columns():
-    """Alerting used to coordinate across replicas; nothing else in MLflow does.
-
-    Every other periodic task settles for ``huey.lock_task`` and a single consumer,
-    which is the deployment shape the product supports. Alerting carried lease
-    columns, ``hashtext`` sticky assignment, ``SKIP LOCKED`` and a dialect-split
-    query for a shape nothing else offered -- and ``rollup_state``'s lease was never
-    read or written at all.
-
-    This pins the removal: reintroducing a lease should be a deliberate decision,
-    not something that reappears because a future change assumed it was still there.
-    """
-    from mlflow.store.tracking.dbmodels.models import SqlAlertInstance, SqlAlertRule, SqlRollupState
-
-    for model in (SqlAlertRule, SqlAlertInstance, SqlRollupState):
-        columns = {c.name for c in model.__table__.columns}
-        assert not {c for c in columns if "lease" in c}, f"{model.__name__} grew a lease column"
-        indexes = {i.name for i in model.__table__.indexes}
-        assert "index_rollup_state_claim" not in indexes

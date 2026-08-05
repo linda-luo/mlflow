@@ -136,13 +136,10 @@ CREATE TABLE registered_models (
 CREATE TABLE rollup_state (
 	source VARCHAR(50) NOT NULL,
 	dimension_key VARCHAR(20) DEFAULT '' NOT NULL,
-	metric_key VARCHAR(250) DEFAULT '' NOT NULL,
 	watermark_ms BIGINT DEFAULT '0' NOT NULL,
 	coverage_start_ms BIGINT,
-	lease_owner VARCHAR(64),
-	lease_expires_ms BIGINT,
 	last_updated_ms BIGINT,
-	CONSTRAINT rollup_state_pk PRIMARY KEY (source, dimension_key, metric_key)
+	CONSTRAINT rollup_state_pk PRIMARY KEY (source, dimension_key)
 )
 
 
@@ -195,7 +192,6 @@ CREATE TABLE alert_rules (
 	alert_rule_id VARCHAR(36) NOT NULL,
 	experiment_id INTEGER NOT NULL,
 	name VARCHAR(256) NOT NULL,
-	description VARCHAR(1000),
 	severity VARCHAR(10) DEFAULT 'MEDIUM' NOT NULL,
 	enabled BOOLEAN DEFAULT 1 NOT NULL,
 	metric_key VARCHAR(250) NOT NULL,
@@ -212,8 +208,6 @@ CREATE TABLE alert_rules (
 	last_evaluated_ms BIGINT,
 	next_evaluation_at_ms BIGINT,
 	last_sample_count INTEGER,
-	lease_owner VARCHAR(64),
-	lease_expires_ms BIGINT,
 	deleted_at_ms BIGINT,
 	channels TEXT,
 	created_by VARCHAR(255),

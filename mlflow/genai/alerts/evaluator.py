@@ -268,8 +268,7 @@ class IncrementalMergeCache:
     In memory and process-local. It is shared by every evaluator thread, which is
     the reason threads are the right shape for this: separate processes would each
     hold a cold copy, and a rule bouncing between them would silently go back to a
-    full read every cycle. Sticky assignment therefore now separates *replicas*
-    rather than threads. A restart costs one cold read; an hourly full recompute
+    full read every cycle. A restart costs one cold read; an hourly full recompute
     guards against drift.
 
     Keyed by :class:`ReadSignature` rather than ``(rule_id, series_id)``: the
@@ -501,12 +500,9 @@ def next_due_ms(rule: AlertRule, now_ms: int) -> int:
 def build_due_rule_query(now_ms: int, limit: int = DEFAULT_BATCH_SIZE):
     """SELECT of due rule ids, most-overdue-first.
 
-    One query, one dialect. This used to fan rules across replicas -- ``hashtext``
-    sticky assignment and ``FOR UPDATE SKIP LOCKED`` on Postgres, an over-fetching
-    select filtered in Python everywhere else, and a lease column marking rules
-    in flight. Nothing else in MLflow coordinates background work that way: every
-    other periodic task settles for ``huey.lock_task`` and one consumer, which is
-    the deployment shape the product actually supports. Alerting now matches.
+    One query, one dialect. Alerting runs a single consumer under
+    ``huey.lock_task``, the same shape as every other periodic task, so claiming
+    rules needs no cross-process coordination.
 
     ``next_evaluation_at_ms`` is materialized rather than computed:
     ``last_evaluated_ms + interval * 1000 <= now`` is arithmetic across two columns

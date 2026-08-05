@@ -116,7 +116,7 @@ def upgrade():
     )
     op.create_index("index_metric_rollups_bucket", "metric_rollups", ["bucket_start_ms"])
 
-    # Keyed by series family -- one (source, dimension_key, metric_key) -- not by
+    # Keyed by series family -- one (source, dimension_key) -- not by
     # source. Families write disjoint series, so nothing orders them: each can be
     # sealed by its own worker, and a rule can be evaluated against the freshness of
     # the one family it reads rather than the slowest family in the deployment.
@@ -287,7 +287,6 @@ def downgrade():
 
     op.drop_table("alert_instances")
     op.drop_table("alert_rules")
-    op.drop_index("index_rollup_state_claim", table_name="rollup_state")
     op.drop_table("rollup_state")
     op.drop_table("metric_rollups")
     op.drop_table("metric_series")

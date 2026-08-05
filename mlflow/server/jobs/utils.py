@@ -811,7 +811,7 @@ def register_periodic_tasks(huey_instance) -> None:
         "no-ops when trace archival is disabled or unconfigured)"
     )
 
-    # One task per rollup *unit* -- a (source, dimension_key, metric_key) family --
+    # One task per rollup *unit* -- a (source, dimension_key) family --
     # rather than one task for everything. Units have separate watermarks and write
     # disjoint series, so nothing orders them; running them under a single lock on a
     # single connection serialized them for no reason and made the slowest family the
