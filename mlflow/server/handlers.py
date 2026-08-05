@@ -7233,6 +7233,35 @@ def _alert_rule_response(rule):
     return jsonify({"alert_rule": dataclasses.asdict(rule)})
 
 
+_CREATE_ALERT_RULE_SCHEMA = {
+    "experiment_id": [_assert_required, _assert_string],
+    "name": [_assert_required, _assert_string],
+    "metric_key": [_assert_required, _assert_string],
+    "dimension_key": [_assert_required, _assert_string],
+    "aggregation": [_assert_required, _assert_string],
+    "comparator": [_assert_required, _assert_string],
+    "threshold": [_assert_required, _assert_floatlike],
+    "window_seconds": [_assert_required, _assert_intlike],
+    # Nullable, matching the patch schema and the columns themselves. A client
+    # that sends `null` rather than omitting the key means the same thing, and
+    # rejecting one spelling produced an error naming the wrong field entirely.
+    "dimension_value": [_nullable(_assert_string)],
+    "percentile_value": [_nullable(_assert_floatlike)],
+    "sustain_seconds": [_assert_intlike],
+    "min_sample_count": [_assert_intlike],
+    "severity": [_assert_string],
+    "enabled": [_assert_bool],
+    "channels": [_assert_array],
+}
+"""Named rather than inlined so `RestStore` can be tested against it.
+
+Every RestStore test mocks the transport, so without a shared handle on the real
+schema the client's payload and the server's expectations are only ever checked
+against each other by a human reading both files -- which is exactly how the
+`experiment_id` type mismatch survived.
+"""
+
+
 @catch_mlflow_exception
 @_disable_if_artifacts_only
 def _create_alert_rule():
@@ -7244,27 +7273,7 @@ def _create_alert_rule():
 
     request_json = _get_validated_flask_request_json(
         flask_request=request,
-        schema={
-            "experiment_id": [_assert_required, _assert_string],
-            "name": [_assert_required, _assert_string],
-            "metric_key": [_assert_required, _assert_string],
-            "dimension_key": [_assert_required, _assert_string],
-            "aggregation": [_assert_required, _assert_string],
-            "comparator": [_assert_required, _assert_string],
-            "threshold": [_assert_required, _assert_floatlike],
-            "window_seconds": [_assert_required, _assert_intlike],
-            # Nullable, matching the patch schema and the columns themselves. A
-            # client that sends `null` rather than omitting the key means the same
-            # thing, and rejecting one spelling produced an error naming the wrong
-            # field entirely.
-            "dimension_value": [_nullable(_assert_string)],
-            "percentile_value": [_nullable(_assert_floatlike)],
-            "sustain_seconds": [_assert_intlike],
-            "min_sample_count": [_assert_intlike],
-            "severity": [_assert_string],
-            "enabled": [_assert_bool],
-            "channels": [_assert_array],
-        },
+        schema=_CREATE_ALERT_RULE_SCHEMA,
     )
     window_seconds = int(request_json["window_seconds"])
     percentile_value = request_json.get("percentile_value")

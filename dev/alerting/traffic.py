@@ -123,11 +123,16 @@ def exception_event(exception_type, end_ms):
     )
 
 
-def emit_batch(store, experiment_id, degraded):
-    """One tick: a few completed traces plus their judge verdicts."""
+def emit_batch(store, experiment_id, degraded, traces_per_tick=None):
+    """One tick: a few completed traces plus their judge verdicts.
+
+    ``traces_per_tick`` overrides the demo's own low rate. The load test reuses
+    this function, so the shapes stay identical whatever the volume.
+    """
     now_ms = get_current_time_millis()
     rows = []
-    for _ in range(rng.randint(3, 6)):
+    count = traces_per_tick if traces_per_tick is not None else rng.randint(3, 6)
+    for _ in range(count):
         if degraded:
             latency = rng.randint(20 * MINUTE_MS, 70 * MINUTE_MS)
             status = "ERROR" if rng.random() < 0.25 else "OK"
@@ -280,6 +285,11 @@ def emit_batch(store, experiment_id, degraded):
 def main():
     uri = os.environ["MLFLOW_BACKEND_STORE_URI"]
     healthy_minutes = float(os.environ.get("DEMO_HEALTHY_MINUTES", "4"))
+    # Traces per second. The default is deliberately low -- the demo is meant to be
+    # readable, and a rule firing is easier to follow at a handful of traces a tick.
+    # Raise it to watch the seeded rules under real volume.
+    rate = float(os.environ.get("DEMO_TRACES_PER_SECOND", "0"))
+    traces_per_tick = max(1, round(rate * TICK_SECONDS)) if rate > 0 else None
     store = SqlAlchemyStore(uri, "file:///tmp/mlflow-artifacts")
 
     experiments = store.search_experiments(filter_string=f"name = '{EXPERIMENT_NAME}'")
@@ -293,6 +303,7 @@ def main():
     print(
         f"[traffic] emitting into experiment {experiment_id}; "
         f"healthy for {healthy_minutes:g} min, then degrading"
+        + (f"; {rate:g} traces/sec" if traces_per_tick else "")
     )
     announced = False
     total = 0
@@ -302,7 +313,7 @@ def main():
         if degraded and not announced:
             print("[traffic] *** agent degrading: latency up, tools timing out ***")
             announced = True
-        n, failures = emit_batch(store, experiment_id, degraded)
+        n, failures = emit_batch(store, experiment_id, degraded, traces_per_tick)
         total += n
         print(
             f"[traffic] t+{elapsed_min:4.1f}m  {'DEGRADED' if degraded else 'healthy '}  "

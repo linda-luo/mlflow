@@ -2,19 +2,15 @@
 
 Documented in ``mlflow/genai/alerts/README.md`` alongside the code it tests.
 
-Runs a ladder of traffic bursts (10s, then 30s, then 60s, at rising offered
-rates) against the demo stack (see ``compose.yml``), and checks -- against the
-real Postgres/Timescale database, not a mock -- that the aggregator kept up:
+**Nascent.** One burst against the demo stack (see ``compose.yml``), checked
+against the real Postgres/Timescale database rather than a mock:
 
-  1. No loss: every raw row behind a family is reflected in its rollups.
-  2. No gaps: the aggregator never fell far enough behind to gap-mark.
-  3. Percentile accuracy: the stored sketch's p95 is within 2% of the true one.
-  4. Watermark recovery: the aggregator catches back up within a few ticks.
-  5. Alerts saw the truth: a fired rule's observed value matches the raw rows.
-
-Escalates only while the previous level passed every assertion, and stops at
-the first failure. Never bursts longer than 60 seconds -- that is the ceiling
-this script is bound by, not merely a default.
+  1. Ingest: what the client sent actually arrived.
+  2. No loss: every raw row behind a family is reflected in its rollups.
+  3. No gaps: the aggregator never fell far enough behind to gap-mark.
+  4. Percentile accuracy: the stored sketch's p95 is within 2% of the true one.
+  5. Watermark recovery: the aggregator catches back up within a few ticks.
+  6. Alerts saw the truth: a fired rule's observed value matches the raw rows.
 
 Traffic is written directly to the tracking store, reusing ``traffic.py``'s
 trace/span shapes, exactly the way ``dev/alerting/traffic.py`` does it for the
@@ -24,8 +20,8 @@ locally beyond Docker: no local Postgres driver, no local mlflow import.
 
 Usage::
 
-    uv run dev/alerting/load_test/run.py                       # full ladder
-    uv run dev/alerting/load_test/run.py --burst 10 --rate 200  # one level only
+    uv run dev/alerting/load_test/run.py                        # the default burst
+    uv run dev/alerting/load_test/run.py --burst 10 --rate 200  # a burst of your own
 """
 
 import argparse
@@ -63,8 +59,10 @@ export queue is bounded and drops spans ("Queue full, dropping Span") rather tha
 applying backpressure, which is the right call for an app but means the client's
 own count is not evidence that anything arrived."""
 
-DEFAULT_LEVELS = [(10, 50), (30, 150), (60, 300)]
-"""(burst_seconds, offered traces/sec), escalating in both duration and rate."""
+DEFAULT_LEVELS = [(10, 50)]
+"""One burst: 500 traces, which arrive intact with stock client settings.
+
+Each entry is ``(burst_seconds, offered traces/sec)``."""
 
 WATERMARK_POLL_INTERVAL_S = 10
 WATERMARK_MAX_TICKS = 14
@@ -715,7 +713,7 @@ def main() -> None:
     parser.add_argument(
         "--only-alert-check",
         action="store_true",
-        help="skip the ladder and just poll the (already-created) rule for a fired instance",
+        help="skip the burst and just poll the (already-created) rule for a fired instance",
     )
     args = parser.parse_args()
 

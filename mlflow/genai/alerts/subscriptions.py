@@ -63,9 +63,15 @@ def load_active_subscriptions(session) -> list[Subscription]:
     One indexed ``DISTINCT`` over a table holding on the order of a hundred rows,
     called once per aggregation run -- not per unit and not per bucket.
 
-    A metric no rule can even express is therefore never aggregated. ``input_cost``
-    and ``input_tokens``, for instance, are not in ``METRIC_CATALOGUE``, so nothing
-    can read them and nothing writes them.
+    Scoped per *experiment*, which is what actually bounds the write volume: a
+    family is aggregated only for the experiments holding a rule that reads it, so
+    an experiment nobody has written a rule for produces no series at all, however
+    much traffic it takes.
+
+    This does not narrow the scan, only the write. The units run on a fixed
+    schedule so their watermarks stay current, and :func:`is_subscribed` discards
+    the unsubscribed series after the scan -- which is why a new rule starts
+    producing rows on the next bucket rather than after a backfill.
     """
     rows = (
         session

@@ -885,6 +885,37 @@ def test_rest_store_create_posts_the_rule_and_parses_the_response(rest_store):
     assert created == rule
 
 
+def test_rest_store_create_sends_a_body_the_endpoint_accepts(rest_store):
+    """The wire payload, checked against the handler's own schema.
+
+    Every other RestStore test here mocks the transport, so nothing downstream
+    of the mock is exercised -- and a payload can reach the right verb and path
+    while still being rejected on arrival. That is not hypothetical: the body
+    used to be `dataclasses.asdict(rule)`, whose `experiment_id` is an `int` per
+    the dataclass, against an endpoint that validates it with `_assert_string`.
+    Correctly typed input 400'd, and a mock could never have noticed.
+    """
+    from mlflow.server.handlers import _CREATE_ALERT_RULE_SCHEMA, _validate_request_json_with_schema
+
+    rule = _rule("7", alert_rule_id="rule-1")
+    assert isinstance(rule.experiment_id, int)
+
+    with mock.patch(
+        "mlflow.store.tracking.rest_store.http_request_safe",
+        return_value=_rest_response({"alert_rule": dataclasses.asdict(rule)}),
+    ) as mock_request:
+        rest_store.create_alert_rule(rule)
+
+    body = mock_request.call_args[1]["json"]
+    _validate_request_json_with_schema(
+        body, _CREATE_ALERT_RULE_SCHEMA, proto_parsing_succeeded=None
+    )
+    # The id and the derived interval are the server's to assign, so a create
+    # request has no business carrying them.
+    assert "alert_rule_id" not in body
+    assert "evaluation_interval_seconds" not in body
+
+
 @pytest.mark.parametrize(
     ("call", "expected_endpoint", "expected_method", "payload"),
     [

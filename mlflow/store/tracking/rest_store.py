@@ -2580,7 +2580,42 @@ class RestStore(
 
 
 def _alert_rule_to_dict(rule) -> dict:
-    return dataclasses.asdict(rule)
+    """The create request body for ``rule``, in the types the endpoint accepts.
+
+    Deliberately not ``dataclasses.asdict``. Two things go wrong with it:
+
+    * ``AlertRule.experiment_id`` is an ``int`` -- that is the declared type, and
+      what the SQLAlchemy store hands back -- while the endpoint validates it with
+      ``_assert_string``. Sending the dataclass verbatim therefore 400s on exactly
+      the value a caller is supposed to supply.
+    * It also sends the server-owned fields (``alert_rule_id``,
+      ``evaluation_interval_seconds``, ``last_evaluated_ms``, ``deleted_at_ms``
+      and the rest), which the handler ignores today but which read as a client
+      trying to set them.
+
+    So the payload is built from the create schema instead. ``min_sample_count``
+    is only sent when the rule carries one, because omitting the key is what asks
+    the server for the derived suggestion -- sending an explicit ``0`` means zero.
+    """
+    payload = {
+        "experiment_id": str(rule.experiment_id),
+        "name": rule.name,
+        "metric_key": rule.metric_key,
+        "dimension_key": rule.dimension_key,
+        "aggregation": rule.aggregation,
+        "comparator": rule.comparator,
+        "threshold": float(rule.threshold),
+        "window_seconds": int(rule.window_seconds),
+        "dimension_value": rule.dimension_value,
+        "percentile_value": rule.percentile_value,
+        "sustain_seconds": int(rule.sustain_seconds),
+        "severity": rule.severity,
+        "enabled": bool(rule.enabled),
+        "channels": rule.channels or [],
+    }
+    if rule.min_sample_count:
+        payload["min_sample_count"] = int(rule.min_sample_count)
+    return payload
 
 
 def _alert_rule_from_dict(payload: dict):

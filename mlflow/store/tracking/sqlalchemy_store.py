@@ -9362,10 +9362,14 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     # due rules, opening instances) are not here: they need dialect-specific
     # SQL and only ever run in-process on the server.
     #
-    # `mlflow.genai.alerts` is imported lazily throughout, matching the
-    # review-queue and label-schema methods above: `mlflow.genai.__init__`
-    # pulls in evaluation and judges, which import the tracking client, so a
-    # module-level import here would close an import cycle.
+    # `mlflow.genai.alerts` is imported lazily in the methods below. Not to
+    # break an import cycle -- this module already imports `mlflow.genai.judges`
+    # and `mlflow.genai.scorers` at the top, so `mlflow.genai` is fully loaded
+    # either way, and `span_errors` is imported at module level for that reason.
+    # It is to keep `aggregator` and `evaluator` (and the sqlalchemy and dbmodels
+    # they pull in) off the import path of a store that does not otherwise need
+    # them, so an import added on the alerting side cannot reach back here and
+    # close a cycle that does not exist today.
     # ------------------------------------------------------------------
 
     def _alert_rule_query(self, session, include_deleted=False):

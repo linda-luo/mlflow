@@ -54,37 +54,49 @@ def main():
         print("[bootstrap] alert rules already present")
         return
 
-    # Short windows so the demo reacts in minutes rather than hours. The 120s
-    # floor is the minimum the schema permits.
+    # The experiment is always created -- `traffic.py` polls for it, and a rule has
+    # to live somewhere. Only the demo rules are opt-out, for evaluating the rule
+    # editor from an empty page.
+    #
+    # Note the consequence: aggregation is demand-driven, so with no rules nothing
+    # subscribes to a series and the aggregator writes no rollups at all. Buckets
+    # start being sealed for a family when the first rule reading it is created.
+    if os.environ.get("DEMO_SEED_RULES", "1") == "0":
+        print("[bootstrap] DEMO_SEED_RULES=0 -- experiment ready, seeding no demo rules")
+        return
+
+    # 300s windows: MIN_WINDOW_SECONDS, the shortest the schema permits. A rule
+    # waits one whole window before its first evaluation, so this is also what sets
+    # how long the demo takes to say anything.
     rules = [
         rule(
             experiment_id, "Checkout p95 latency",
             metric_key="latency", dimension_key="TRACES", aggregation="PERCENTILE",
             percentile_value=95, comparator="GT", threshold=30 * MINUTE_MS,
-            severity="HIGH", sustain_seconds=120, window_seconds=600,
+            severity="HIGH", sustain_seconds=120, window_seconds=300,
         ),
         rule(
             experiment_id, "Average latency regression",
             metric_key="latency", dimension_key="TRACES", aggregation="AVG",
             comparator="GT", threshold=10 * MINUTE_MS, severity="MEDIUM",
-            window_seconds=600,
+            window_seconds=300,
         ),
         rule(
             experiment_id, "search_docs failures",
             metric_key="error_count", dimension_key="SPAN_NAME",
             dimension_value="search_docs", aggregation="COUNT",
-            comparator="GTE", threshold=5, severity="HIGH", window_seconds=600,
+            comparator="GTE", threshold=5, severity="HIGH", window_seconds=300,
         ),
         rule(
             experiment_id, "Safety judge pass rate",
             metric_key="assessment_value", dimension_key="ASSESSMENTS",
             dimension_value="safety", aggregation="AVG",
-            comparator="LT", threshold=0.9, severity="HIGH", window_seconds=600,
+            comparator="LT", threshold=0.9, severity="HIGH", window_seconds=300,
         ),
         rule(
             experiment_id, "Traffic dropped",
             metric_key="latency", dimension_key="TRACES", aggregation="COUNT",
-            comparator="LT", threshold=5, severity="LOW", window_seconds=600,
+            comparator="LT", threshold=5, severity="LOW", window_seconds=300,
         ),
     ]
     for r in rules:

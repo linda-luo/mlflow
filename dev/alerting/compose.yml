@@ -45,6 +45,11 @@ services:
       # More than one evaluator thread, which is the other thing Windows cannot
       # exercise. Postgres only: SQLite has a single writer and clamps this to 1.
       MLFLOW_ALERT_EVALUATOR_THREADS: "4"
+      # Set to "0" to bring the stack up with no demo rules -- migrations, the
+      # Timescale tiers and the experiment still run. Deleting the rules in the UI
+      # is not equivalent: bootstrap re-seeds them on the next restart, because
+      # soft-deleted rules do not come back from `list_alert_rules`.
+      DEMO_SEED_RULES: "${DEMO_SEED_RULES:-1}"
     ports:
       # 5002 on the host: a stale MLflow server from an earlier session is still
       # listening on 5000 and serving pre-revert code.
@@ -79,5 +84,12 @@ services:
       # Minutes of healthy traffic before the agent starts degrading, so you can
       # watch a rule cross from green to PENDING to FIRED rather than arriving
       # to an already-broken system.
-      DEMO_HEALTHY_MINUTES: "4"
+      # Kept below the rules' 5-minute window, so the first evaluation already sees
+      # mostly degraded traffic rather than averaging it away against healthy data.
+      DEMO_HEALTHY_MINUTES: "${DEMO_HEALTHY_MINUTES:-2}"
+      # Traces per second into the seeded rules' experiment. "0" keeps the demo's
+      # own low, readable rate (~1/s). Raise it to drive the seeded rules under
+      # volume -- unlike the load test, this path fabricates latency, so the
+      # latency rules actually breach.
+      DEMO_TRACES_PER_SECOND: "${DEMO_TRACES_PER_SECOND:-0}"
     command: ["python", "dev/alerting/traffic.py"]
