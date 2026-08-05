@@ -13,14 +13,14 @@ are the same set, which is what these tests assert.
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import (
     METRIC_CATALOGUE,
     percentile_supported_metrics,
     validate_metric_triple,
 )
-from mlflow.genai.alerts.rollup_reader import Bucket, aggregate_buckets
-from mlflow.genai.alerts.sketch import spec_for
+from mlflow.alerts.rollup_reader import Bucket, aggregate_buckets
+from mlflow.alerts.sketch import spec_for
 
 _PERCENTILE_METRICS_IN_CATALOGUE = sorted(
     key for key, spec in METRIC_CATALOGUE.items() if "PERCENTILE" in spec.aggregations

@@ -196,7 +196,7 @@ def percentile_supported_metrics() -> frozenset[str]:
     Imported lazily to keep ``entities`` free of a dependency on ``sketch``, which
     is the direction the rest of the package imports in.
     """
-    from mlflow.genai.alerts.sketch import SPECS
+    from mlflow.alerts.sketch import SPECS
 
     return frozenset(SPECS)
 
@@ -376,7 +376,7 @@ class AlertInstance:
 
     Set on the first healthy evaluation after a breach and cleared by the next
     breaching one, so it is both the "has this been healthy before?" flag that
-    :func:`~mlflow.genai.alerts.state_machine.evaluate_transition` needs and,
+    :func:`~mlflow.alerts.state_machine.evaluate_transition` needs and,
     once the instance reaches INACTIVE, the time it actually recovered.
 
     Deliberately not a counter of healthy evaluations: an instance needs to know

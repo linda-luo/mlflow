@@ -37,14 +37,14 @@ import uuid
 from dataclasses import replace
 from typing import Literal
 
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     SYSTEM_DISMISS_NOT_SUSTAINED,
     AlertInstance,
     AlertRule,
     Observation,
     Transition,
 )
-from mlflow.genai.alerts.histogram import compare
+from mlflow.alerts.histogram import compare
 
 OPEN_STATES = frozenset({"PENDING", "FIRED"})
 """States the partial unique index ``index_alert_instances_open`` covers.
@@ -163,7 +163,7 @@ def evaluate_transition(
         new_instance_id: id for a newly opened instance; generated when omitted.
 
     Returns:
-        A :class:`~mlflow.genai.alerts.entities.Transition`. Its ``instance`` is a
+        A :class:`~mlflow.alerts.entities.Transition`. Its ``instance`` is a
         *new* object — the input is never mutated — and ``should_notify`` is true
         on exactly the transition into FIRED.
     """

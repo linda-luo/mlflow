@@ -17,7 +17,7 @@ so an hour boundary is ``ms // _HOUR_MS`` with no round-trip to the database.
 
 from dataclasses import dataclass
 
-from mlflow.genai.alerts.entities import BUCKET_MS
+from mlflow.alerts.entities import BUCKET_MS
 
 HOUR_MS = 3_600_000
 

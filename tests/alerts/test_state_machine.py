@@ -1,13 +1,13 @@
 import pytest
 
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     SYSTEM_DISMISS_NOT_SUSTAINED,
     SYSTEM_DISMISS_RULE_EDITED,
     AlertInstance,
     AlertRule,
     Observation,
 )
-from mlflow.genai.alerts.state_machine import (
+from mlflow.alerts.state_machine import (
     ACTIVE_STATES,
     OPEN_STATES,
     classify,

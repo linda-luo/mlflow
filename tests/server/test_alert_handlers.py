@@ -6,7 +6,7 @@ import pytest
 from flask import Flask
 from werkzeug.test import Client
 
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     SYSTEM_DISMISS_RULE_DELETED,
     SYSTEM_DISMISS_RULE_EDITED,
 )
@@ -533,7 +533,7 @@ def test_series_points_carry_a_timestamp_and_a_nullable_value(client, experiment
 
 def test_series_caps_the_points_it_will_return(client, experiment_id):
     """Three days at the rule's own interval is 864 folds; the step widens instead."""
-    from mlflow.genai.alerts.series import MAX_SERIES_POINTS
+    from mlflow.alerts.series import MAX_SERIES_POINTS
 
     rule = _body(client.post(f"{_AJAX}/rules", json=_create_payload(experiment_id)))["alert_rule"]
     three_days_ms = 3 * 24 * 60 * 60 * 1000

@@ -27,8 +27,8 @@ from mlflow.entities.trace_metrics import (
 )
 
 if TYPE_CHECKING:
+    from mlflow.alerts.entities import AlertInstance, AlertRule
     from mlflow.entities import EvaluationDataset
-    from mlflow.genai.alerts.entities import AlertInstance, AlertRule
     from mlflow.genai.label_schemas.label_schemas import InputType, LabelSchema
     from mlflow.genai.review_queues import ReviewQueue, ReviewQueueItem
     from mlflow.genai.scorers.online.entities import (

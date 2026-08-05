@@ -6,7 +6,7 @@ continuous aggregate is the only Postgres-specific piece of the rollup layer.
 
 Two tiers, deliberately. The 1h aggregate serves history *and* the evaluator's
 full-read path -- a cold cache or the hourly recompute -- via
-:mod:`mlflow.genai.alerts.tiers`. A window ending at 10:37 is never itself an hourly
+:mod:`mlflow.alerts.tiers`. A window ending at 10:37 is never itself an hourly
 bucket, but the whole hours *inside* it are, which covers a 24h window in about 83
 reads instead of 1,440 and a 3-day window in about 131 instead of 4,320.
 
@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 import sqlalchemy as sa
 
-from mlflow.genai.alerts.aggregator import LAG_MS
+from mlflow.alerts.aggregator import LAG_MS
 from mlflow.store.db import db_types
 
 _logger = logging.getLogger(__name__)

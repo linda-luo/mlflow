@@ -208,7 +208,7 @@ Three things produce traffic or verdicts, and they are not interchangeable:
 
 ```bash
 uv sync                                                          # first time only
-uv run pytest tests/genai/alerts/                                # unit + store
+uv run pytest tests/alerts/                                # unit + store
 uv run --with httpx2 pytest tests/server/test_alert_handlers.py  # REST handlers
 ```
 

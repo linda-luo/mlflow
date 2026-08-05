@@ -9,7 +9,7 @@ So each point here is the same rolling window the evaluator saw: for a step at
 ``t``, the projection over ``[t - window, t)``. Stepping by the rule's own
 evaluation interval means the points land where evaluations landed.
 
-Projection goes through :func:`~mlflow.genai.alerts.rollup_reader.aggregate_buckets`
+Projection goes through :func:`~mlflow.alerts.rollup_reader.aggregate_buckets`
 -- and therefore ``project_aggregate``, which its docstring calls "the one place
 this projection is implemented". Two copies of it once disagreed about the empty
 window and the evaluator used the wrong one; a chart with its own arithmetic would
@@ -18,8 +18,8 @@ be a third copy, free to disagree with both.
 
 from dataclasses import dataclass
 
-from mlflow.genai.alerts.entities import BUCKET_MS, AlertRule, SeriesKey
-from mlflow.genai.alerts.rollup_reader import Bucket, RollupReader, aggregate_buckets
+from mlflow.alerts.entities import BUCKET_MS, AlertRule, SeriesKey
+from mlflow.alerts.rollup_reader import Bucket, RollupReader, aggregate_buckets
 
 MAX_SERIES_POINTS = 500
 """Ceiling on points returned for one range.

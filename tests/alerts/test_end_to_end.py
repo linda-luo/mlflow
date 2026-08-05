@@ -15,15 +15,15 @@ from opentelemetry.sdk.resources import Resource as OTelResource
 from opentelemetry.sdk.trace import Event as OTelEvent
 from opentelemetry.sdk.trace import ReadableSpan as OTelReadableSpan
 
-from mlflow.entities.span import create_mlflow_span
-from mlflow.genai.alerts.aggregator import RollupAggregator
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.aggregator import RollupAggregator
+from mlflow.alerts.entities import (
     AlertRule,
     SeriesKey,
     derive_evaluation_interval_seconds,
 )
-from mlflow.genai.alerts.evaluator import AlertEvaluator
-from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
+from mlflow.alerts.evaluator import AlertEvaluator
+from mlflow.alerts.sql_rollup_reader import SqlRollupReader
+from mlflow.entities.span import create_mlflow_span
 from mlflow.store.tracking.dbmodels.models import SqlSpanError, SqlTraceInfo
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 from mlflow.tracing.utils import TraceJSONEncoder

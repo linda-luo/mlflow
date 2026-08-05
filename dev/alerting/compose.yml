@@ -9,7 +9,7 @@
 #   docker compose -f dev/alerting/compose.yml up --build
 #
 # Docs for this stack and the load-test harness live with the code they
-# exercise: mlflow/genai/alerts/README.md
+# exercise: mlflow/alerts/README.md
 #   -> http://localhost:5000
 name: mlflow-alerting-demo
 

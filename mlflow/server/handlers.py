@@ -7265,7 +7265,7 @@ against each other by a human reading both files -- which is exactly how the
 @catch_mlflow_exception
 @_disable_if_artifacts_only
 def _create_alert_rule():
-    from mlflow.genai.alerts.entities import (
+    from mlflow.alerts.entities import (
         AlertRule,
         derive_evaluation_interval_seconds,
         derive_min_sample_count,
@@ -7445,10 +7445,10 @@ def _get_alert_rule_series():
 
     Each point is a rolling ``window_seconds`` projection rather than a per-bucket
     value, so the line and the alert cannot disagree about when the threshold was
-    crossed -- see ``mlflow.genai.alerts.series``.
+    crossed -- see ``mlflow.alerts.series``.
     """
-    from mlflow.genai.alerts.series import compute_rule_series
-    from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
+    from mlflow.alerts.series import compute_rule_series
+    from mlflow.alerts.sql_rollup_reader import SqlRollupReader
 
     request_json = _get_validated_flask_request_json(
         flask_request=request,

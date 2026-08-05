@@ -15,8 +15,8 @@ import logging
 import warnings
 from abc import ABC, abstractmethod
 
+from mlflow.alerts.entities import AlertInstance, AlertRule
 from mlflow.exceptions import MlflowException
-from mlflow.genai.alerts.entities import AlertInstance, AlertRule
 from mlflow.protos.databricks_pb2 import INVALID_PARAMETER_VALUE
 from mlflow.utils.plugins import get_entry_points
 

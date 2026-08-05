@@ -11,9 +11,9 @@ import random
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.rollup_reader import Bucket, aggregate_buckets
-from mlflow.genai.alerts.sketch import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.rollup_reader import Bucket, aggregate_buckets
+from mlflow.alerts.sketch import (
     ALPHA,
     LOG_SKETCH,
     SCORE_SKETCH,

@@ -9,9 +9,9 @@ written, and swapping in the real reader is the first integration test.
 from dataclasses import dataclass
 from typing import Protocol
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import BUCKET_MS, Observation, SeriesKey
-from mlflow.genai.alerts.sketch import LOG_SKETCH, SketchSpec
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import BUCKET_MS, Observation, SeriesKey
+from mlflow.alerts.sketch import LOG_SKETCH, SketchSpec
 
 
 @dataclass(frozen=True)
@@ -267,7 +267,7 @@ class FakeRollupReader(RollupReader):
         if self._coarse_usable_until_ms is None:
             return self.read_buckets(series, start_ms, end_ms)
 
-        from mlflow.genai.alerts.tiers import HOUR_MS, plan_cover
+        from mlflow.alerts.tiers import HOUR_MS, plan_cover
 
         buckets: list[Bucket] = []
         for span in plan_cover(start_ms, end_ms, self._coarse_usable_until_ms):

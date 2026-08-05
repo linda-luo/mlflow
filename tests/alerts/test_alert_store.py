@@ -5,8 +5,7 @@ from unittest import mock
 
 import pytest
 
-from mlflow.exceptions import MlflowException
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     MAX_WINDOW_SECONDS,
     MIN_WINDOW_SECONDS,
     SYSTEM_DISMISS_RULE_DISABLED,
@@ -16,6 +15,7 @@ from mlflow.genai.alerts.entities import (
     derive_evaluation_interval_seconds,
     derive_min_sample_count,
 )
+from mlflow.exceptions import MlflowException
 from mlflow.protos.databricks_pb2 import (
     INVALID_PARAMETER_VALUE,
     RESOURCE_ALREADY_EXISTS,
@@ -1094,7 +1094,7 @@ def test_get_open_alert_instance_ignores_dismissed(store, experiment_id):
 
 
 def test_raw_verifier_counts_traces_above_the_threshold(store, experiment_id):
-    from mlflow.genai.alerts.entities import SeriesKey
+    from mlflow.alerts.entities import SeriesKey
     from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyRawValueVerifier
 
     with store.ManagedSessionMaker(read_only=False) as session:
@@ -1145,7 +1145,7 @@ def test_raw_verifier_counts_traces_above_the_threshold(store, experiment_id):
 
 
 def test_raw_verifier_rejects_metrics_it_cannot_answer_exactly(store):
-    from mlflow.genai.alerts.entities import SeriesKey
+    from mlflow.alerts.entities import SeriesKey
     from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyRawValueVerifier
 
     verifier = SqlAlchemyRawValueVerifier(store)
@@ -1280,7 +1280,7 @@ def test_log_spans_denormalizes_completion_time_and_span_metrics(store, experime
 
 
 def test_in_app_channel_is_registered_and_does_nothing():
-    from mlflow.genai.alerts.notifications import (
+    from mlflow.alerts.notifications import (
         IN_APP_CHANNEL_TYPE,
         InAppChannel,
         get_notification_channel_registry,
@@ -1292,8 +1292,8 @@ def test_in_app_channel_is_registered_and_does_nothing():
 
 
 def test_dispatch_defaults_to_in_app_and_survives_a_failing_channel():
-    from mlflow.genai.alerts.entities import AlertInstance
-    from mlflow.genai.alerts.notifications import (
+    from mlflow.alerts.entities import AlertInstance
+    from mlflow.alerts.notifications import (
         NotificationChannel,
         dispatch,
         get_notification_channel_registry,

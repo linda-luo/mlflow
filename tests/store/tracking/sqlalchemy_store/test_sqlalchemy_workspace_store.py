@@ -2841,7 +2841,7 @@ def test_review_queue_question_lock_holds_in_workspace_store(workspace_tracking_
 
 
 def _alert_rule(experiment_id: str, name: str):
-    from mlflow.genai.alerts.entities import AlertRule
+    from mlflow.alerts.entities import AlertRule
 
     return AlertRule(
         alert_rule_id="",

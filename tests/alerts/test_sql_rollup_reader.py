@@ -2,23 +2,23 @@ from pathlib import Path
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.aggregator import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.aggregator import (
     LAG_MS,
     RollupAggregator,
     build_work_units,
     sealable_max_bucket_ms,
 )
-from mlflow.genai.alerts.entities import BUCKET_MS, AlertRule, SeriesKey
-from mlflow.genai.alerts.evaluator import percentile_count_threshold
-from mlflow.genai.alerts.rollup_reader import (
+from mlflow.alerts.entities import BUCKET_MS, AlertRule, SeriesKey
+from mlflow.alerts.evaluator import percentile_count_threshold
+from mlflow.alerts.rollup_reader import (
     Bucket,
     FakeRollupReader,
     RollupReader,
     aggregate_buckets,
 )
-from mlflow.genai.alerts.sketch import ALPHA, LOG_SKETCH
-from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
+from mlflow.alerts.sketch import ALPHA, LOG_SKETCH
+from mlflow.alerts.sql_rollup_reader import SqlRollupReader
 from mlflow.store.tracking.dbmodels.models import (
     SqlRollupState,
     SqlTraceInfo,
@@ -413,7 +413,7 @@ def test_an_hourly_bucket_counts_in_int_not_decimal(store: SqlAlchemyStore):
     """
     from decimal import Decimal
 
-    from mlflow.genai.alerts.tiers import CoverSpan
+    from mlflow.alerts.tiers import CoverSpan
 
     reader = SqlRollupReader(store)
     session = _StubSession([_DecimalHourRow(T, Decimal("4200"))])
@@ -430,7 +430,7 @@ def test_a_percentile_threshold_survives_an_hourly_count(store: SqlAlchemyStore)
     """The crash site itself, reached with a count that came off the hourly tier."""
     from decimal import Decimal
 
-    from mlflow.genai.alerts.tiers import CoverSpan
+    from mlflow.alerts.tiers import CoverSpan
 
     reader = SqlRollupReader(store)
     session = _StubSession([_DecimalHourRow(T, Decimal("4200"))])

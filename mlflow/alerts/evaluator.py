@@ -1,7 +1,7 @@
 """Evaluator workers — claim due rules, read the window, compare, transition.
 
 A plain callable, driveable from a script, so it is testable against
-:class:`~mlflow.genai.alerts.rollup_reader.FakeRollupReader` without Timescale or
+:class:`~mlflow.alerts.rollup_reader.FakeRollupReader` without Timescale or
 a scheduler.
 
 Three things here are easy to get subtly wrong and are therefore stated once:
@@ -24,8 +24,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Callable, Protocol
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import (
     BUCKET_MS,
     AlertInstance,
     AlertRule,
@@ -33,10 +33,10 @@ from mlflow.genai.alerts.entities import (
     SeriesKey,
     Transition,
 )
-from mlflow.genai.alerts.exemplars import collect_exemplar_trace_ids
-from mlflow.genai.alerts.rollup_reader import Bucket, RollupReader, project_aggregate
-from mlflow.genai.alerts.sketch import SketchSpec
-from mlflow.genai.alerts.state_machine import evaluate_transition
+from mlflow.alerts.exemplars import collect_exemplar_trace_ids
+from mlflow.alerts.rollup_reader import Bucket, RollupReader, project_aggregate
+from mlflow.alerts.sketch import SketchSpec
+from mlflow.alerts.state_machine import evaluate_transition
 from mlflow.utils.time import get_current_time_millis
 
 _logger = logging.getLogger(__name__)
@@ -225,7 +225,7 @@ class WindowAccumulator:
     ) -> Observation:
         """Project one rule's number.
 
-        Delegates to :func:`~mlflow.genai.alerts.rollup_reader.project_aggregate`
+        Delegates to :func:`~mlflow.alerts.rollup_reader.project_aggregate`
         rather than reimplementing it. The two used to be separate, and they
         disagreed: this path treated an empty window as no-data for *every*
         aggregation, so an absence-signal rule could never fire.

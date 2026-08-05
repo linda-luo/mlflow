@@ -88,7 +88,7 @@ export const listAlertDimensionValues = async (
  *
  * Each point is a rolling `window_seconds` projection rather than a per-bucket
  * value, so the line and the alert cannot disagree about when the threshold was
- * crossed. The server folds it; see `mlflow/genai/alerts/series.py`.
+ * crossed. The server folds it; see `mlflow/alerts/series.py`.
  */
 export const getAlertRuleSeries = async (alertRuleId: string, startMs: number, endMs: number): Promise<AlertSeries> => {
   const params = new URLSearchParams({

@@ -29,6 +29,7 @@ from mlflow.utils.crypto import KEKManager, _decrypt_secret
 _SqlAlchemyStatement = TypeVar("_SqlAlchemyStatement", Select, Query)
 
 import mlflow.store.db.utils
+from mlflow.alerts.span_errors import extract_span_errors
 from mlflow.entities import (
     Assessment,
     DatasetInput,
@@ -85,7 +86,6 @@ from mlflow.exceptions import (
     MlflowTraceArchivalMalformedTrace,
     MlflowTracingException,
 )
-from mlflow.genai.alerts.span_errors import extract_span_errors
 from mlflow.genai.judges.instructions_judge import (
     EXPECTATIONS_FIELD,
     InstructionsJudge,
@@ -9353,7 +9353,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             return row.to_mlflow_entity()
 
     # ------------------------------------------------------------------
-    # Alerting: see mlflow/genai/alerts/ for the entity dataclasses, the
+    # Alerting: see mlflow/alerts/ for the entity dataclasses, the
     # metric catalogue and the histogram helpers.
     #
     # `alert_rules` is workspace-scoped through a join to `experiments`
@@ -9362,7 +9362,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     # due rules, opening instances) are not here: they need dialect-specific
     # SQL and only ever run in-process on the server.
     #
-    # `mlflow.genai.alerts` is imported lazily in the methods below. Not to
+    # `mlflow.alerts` is imported lazily in the methods below. Not to
     # break an import cycle -- this module already imports `mlflow.genai.judges`
     # and `mlflow.genai.scorers` at the top, so `mlflow.genai` is fully loaded
     # either way, and `span_errors` is imported at module level for that reason.
@@ -9457,7 +9457,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             )
 
     def create_alert_rule(self, rule):
-        from mlflow.genai.alerts.entities import (
+        from mlflow.alerts.entities import (
             derive_evaluation_interval_seconds,
         )
 
@@ -9582,7 +9582,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             return [_sql_alert_rule_to_entity(row) for row in rows]
 
     def update_alert_rule(self, alert_rule_id, **updates):
-        from mlflow.genai.alerts.entities import (
+        from mlflow.alerts.entities import (
             SYSTEM_DISMISS_RULE_DISABLED,
             SYSTEM_DISMISS_RULE_EDITED,
             derive_evaluation_interval_seconds,
@@ -9686,7 +9686,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             return _sql_alert_rule_to_entity(sql_rule)
 
     def delete_alert_rule(self, alert_rule_id):
-        from mlflow.genai.alerts.entities import SYSTEM_DISMISS_RULE_DELETED
+        from mlflow.alerts.entities import SYSTEM_DISMISS_RULE_DELETED
 
         with self.ManagedSessionMaker(read_only=False) as session:
             sql_rule = self._get_sql_alert_rule(session, alert_rule_id, for_update=True)
@@ -9785,7 +9785,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             return _sql_alert_instance_to_entity(row)
 
     def list_alert_dimension_values(self, experiment_id, metric_key, dimension_key):
-        from mlflow.genai.alerts.aggregator import distinct_dimension_values
+        from mlflow.alerts.aggregator import distinct_dimension_values
 
         with self.ManagedSessionMaker() as session:
             self._validate_experiment_exists(session, experiment_id)
@@ -9815,7 +9815,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     # Deliberately absent from `abstract_store` and `rest_store`: these only ever
     # run in-process on the server, so a remote client has no use for any of them.
     # They are the `AlertEvaluationStore` protocol in
-    # mlflow/genai/alerts/evaluator.py.
+    # mlflow/alerts/evaluator.py.
     #
     # None of them is workspace-scoped. The evaluator runs outside any workspace
     # context and must evaluate every tenant's rules; scoping the due-rule scan
@@ -9824,7 +9824,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
     # ------------------------------------------------------------------
 
     def due_alert_rules(self, now_ms: int, limit: int = 50) -> list:
-        from mlflow.genai.alerts.evaluator import due_rule_ids
+        from mlflow.alerts.evaluator import due_rule_ids
 
         with self.ManagedSessionMaker(read_only=True) as session:
             # The query lives with the evaluator, which is where it is tested.
@@ -9926,7 +9926,7 @@ class SqlAlchemyRawValueVerifier:
     Snapping thresholds to a boundary at rule-creation time makes this uncommon,
     but without it an ambiguous rule silently falls back to the bucketed estimate
     and the evaluator marks the decision inexact. Implements the
-    ``RawValueVerifier`` protocol in mlflow/genai/alerts/evaluator.py.
+    ``RawValueVerifier`` protocol in mlflow/alerts/evaluator.py.
 
     Only latency is supported: it is the only metric whose raw observations are a
     single indexed column (trace duration, span duration). Cost, tokens and
@@ -10079,7 +10079,7 @@ def _validate_alert_rule_spec(rule) -> None:
     driven by the same catalogue, so a form cannot submit a triple that the
     evaluator would reject.
     """
-    from mlflow.genai.alerts.entities import (
+    from mlflow.alerts.entities import (
         MAX_WINDOW_SECONDS,
         MIN_WINDOW_SECONDS,
         validate_dimension_value,
@@ -10151,7 +10151,7 @@ _ALERT_SEVERITIES = frozenset({"LOW", "MEDIUM", "HIGH"})
 
 
 def _sql_alert_rule_to_entity(sql_rule):
-    from mlflow.genai.alerts.entities import AlertRule
+    from mlflow.alerts.entities import AlertRule
 
     return AlertRule(
         alert_rule_id=sql_rule.alert_rule_id,
@@ -10182,7 +10182,7 @@ def _sql_alert_rule_to_entity(sql_rule):
 
 
 def _sql_alert_instance_to_entity(sql_instance):
-    from mlflow.genai.alerts.entities import AlertInstance
+    from mlflow.alerts.entities import AlertInstance
 
     return AlertInstance(
         alert_instance_id=sql_instance.alert_instance_id,

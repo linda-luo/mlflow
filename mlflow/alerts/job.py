@@ -9,11 +9,11 @@ its window is wrong permanently rather than merely late.
 import logging
 import threading
 
+from mlflow.alerts.evaluator import AlertEvaluator, EvaluationCycle
+from mlflow.alerts.sql_rollup_reader import SqlRollupReader
 from mlflow.environment_variables import (
     MLFLOW_ALERT_EVALUATOR_THREADS,
 )
-from mlflow.genai.alerts.evaluator import AlertEvaluator, EvaluationCycle
-from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
 
 _logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ def _get_evaluator() -> AlertEvaluator:
         # Imported lazily: this module is reachable from the tracking package, and
         # resolving the store at import time would pull the server stack into a
         # client install.
-        from mlflow.genai.alerts.notifications import dispatch
+        from mlflow.alerts.notifications import dispatch
         from mlflow.server.handlers import _get_tracking_store
 
         # The SERVER-side backend store, not the client one. `_tracking_service`'s

@@ -19,8 +19,8 @@ errored is the thing alerting exists to prevent.
 
 import logging
 
-from mlflow.genai.alerts.aggregator import build_work_units
-from mlflow.genai.alerts.entities import AlertRule
+from mlflow.alerts.aggregator import build_work_units
+from mlflow.alerts.entities import AlertRule
 
 _logger = logging.getLogger(__name__)
 

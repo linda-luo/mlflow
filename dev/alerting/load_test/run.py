@@ -1,6 +1,6 @@
 """Load-test harness for the alerting rollup pipeline.
 
-Documented in ``mlflow/genai/alerts/README.md`` alongside the code it tests.
+Documented in ``mlflow/alerts/README.md`` alongside the code it tests.
 
 **Nascent.** One burst against the demo stack (see ``compose.yml``), checked
 against the real Postgres/Timescale database rather than a mock:
@@ -44,11 +44,11 @@ HEALTH_URL = f"{MLFLOW_TRACKING_URI}/health"
 BUCKET_MS = 60_000
 LAG_MS = 60_000
 """How long the aggregator waits past a bucket's end before sealing it. See
-``mlflow.genai.alerts.aggregator.LAG_MS`` -- kept in sync by inspection, not
+``mlflow.alerts.aggregator.LAG_MS`` -- kept in sync by inspection, not
 by import, because this script deliberately runs with nothing local to import."""
 
 PCT_TOLERANCE = 0.02
-"""Sketch accuracy: ALPHA in mlflow.genai.alerts.sketch."""
+"""Sketch accuracy: ALPHA in mlflow.alerts.sketch."""
 
 INGEST_TOLERANCE = 0.05
 """How much of what the client sent may fail to reach the database.
@@ -135,7 +135,7 @@ def _check_stack_up() -> None:
 
 _SETUP_CODE = Template(r"""
 import json, os, uuid
-from mlflow.genai.alerts.entities import AlertRule, derive_evaluation_interval_seconds
+from mlflow.alerts.entities import AlertRule, derive_evaluation_interval_seconds
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 
 store = SqlAlchemyStore(os.environ["MLFLOW_BACKEND_STORE_URI"], "file:///tmp/mlflow-artifacts")
@@ -218,7 +218,7 @@ print(json.dumps({
 
 _WATERMARK_CODE = r"""
 import json, os, time
-from mlflow.genai.alerts.aggregator import sealable_max_bucket_ms
+from mlflow.alerts.aggregator import sealable_max_bucket_ms
 from mlflow.store.tracking.dbmodels.models import SqlRollupState
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 
@@ -238,11 +238,11 @@ print(json.dumps({
 
 _RANGE_CHECK_CODE = Template(r"""
 import json, os, statistics
-from mlflow.genai.alerts.aggregator import floor_bucket
-from mlflow.genai.alerts.entities import BUCKET_MS, SeriesKey
-from mlflow.genai.alerts.rollup_reader import aggregate_buckets
-from mlflow.genai.alerts.sketch import spec_for
-from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
+from mlflow.alerts.aggregator import floor_bucket
+from mlflow.alerts.entities import BUCKET_MS, SeriesKey
+from mlflow.alerts.rollup_reader import aggregate_buckets
+from mlflow.alerts.sketch import spec_for
+from mlflow.alerts.sql_rollup_reader import SqlRollupReader
 from mlflow.store.tracking.dbmodels.models import SqlTraceInfo
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 

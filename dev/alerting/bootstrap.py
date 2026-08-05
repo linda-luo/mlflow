@@ -8,8 +8,8 @@ import uuid
 
 import sqlalchemy as sa
 
-from mlflow.genai.alerts.entities import AlertRule, derive_evaluation_interval_seconds
-from mlflow.genai.alerts.timescale import is_timescale_installed, setup_timescale
+from mlflow.alerts.entities import AlertRule, derive_evaluation_interval_seconds
+from mlflow.alerts.timescale import is_timescale_installed, setup_timescale
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 
 MINUTE_MS = 60_000

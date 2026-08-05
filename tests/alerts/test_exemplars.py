@@ -3,8 +3,8 @@ from unittest import mock
 
 import pytest
 
-from mlflow.genai.alerts.entities import BUCKET_MS, AlertRule
-from mlflow.genai.alerts.exemplars import MAX_EXEMPLARS, collect_exemplar_trace_ids
+from mlflow.alerts.entities import BUCKET_MS, AlertRule
+from mlflow.alerts.exemplars import MAX_EXEMPLARS, collect_exemplar_trace_ids
 from mlflow.store.tracking.dbmodels.models import SqlTraceInfo
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 
@@ -136,7 +136,7 @@ def test_a_failing_query_yields_no_exemplars_rather_than_raising(store, experime
     _seed_traces(store, experiment_id, [90_000])
 
     with mock.patch(
-        "mlflow.genai.alerts.exemplars._collect",
+        "mlflow.alerts.exemplars._collect",
         side_effect=RuntimeError("database is on fire"),
     ) as failing:
         ids = collect_exemplar_trace_ids(

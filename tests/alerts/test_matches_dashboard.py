@@ -20,11 +20,11 @@ from pathlib import Path
 
 import pytest
 
+from mlflow.alerts.aggregator import RollupAggregator
+from mlflow.alerts.entities import AlertRule, SeriesKey
+from mlflow.alerts.rollup_reader import aggregate_buckets
+from mlflow.alerts.sql_rollup_reader import SqlRollupReader
 from mlflow.entities.trace_metrics import AggregationType, MetricAggregation, MetricViewType
-from mlflow.genai.alerts.aggregator import RollupAggregator
-from mlflow.genai.alerts.entities import AlertRule, SeriesKey
-from mlflow.genai.alerts.rollup_reader import aggregate_buckets
-from mlflow.genai.alerts.sql_rollup_reader import SqlRollupReader
 from mlflow.store.tracking.dbmodels.models import SqlTraceInfo
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 

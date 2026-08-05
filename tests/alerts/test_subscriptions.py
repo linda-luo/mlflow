@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from mlflow.genai.alerts.aggregator import LAG_MS, RollupAggregator, build_work_units
-from mlflow.genai.alerts.entities import BUCKET_MS, AlertRule
-from mlflow.genai.alerts.subscriptions import load_active_subscriptions
+from mlflow.alerts.aggregator import LAG_MS, RollupAggregator, build_work_units
+from mlflow.alerts.entities import BUCKET_MS, AlertRule
+from mlflow.alerts.subscriptions import load_active_subscriptions
 from mlflow.store.tracking.dbmodels.models import (
     SqlMetricSeries,
     SqlRollupState,

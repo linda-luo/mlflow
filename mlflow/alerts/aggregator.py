@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import (
     BUCKET_MS,
     MAX_DIMENSION_VALUE_LENGTH,
     MAX_WINDOW_SECONDS,
@@ -36,8 +36,8 @@ from mlflow.genai.alerts.entities import (
     SeriesKey,
     is_sliceable,
 )
-from mlflow.genai.alerts.sketch import GAMMA, ZERO_INDEX, SketchSpec, spec_for
-from mlflow.genai.alerts.subscriptions import (
+from mlflow.alerts.sketch import GAMMA, ZERO_INDEX, SketchSpec, spec_for
+from mlflow.alerts.subscriptions import (
     SeriesFamily,
     Subscription,
     is_subscribed,

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.aggregator import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.aggregator import (
     LAG_MS,
     SOURCE_NAMES,
     AggregationRun,
@@ -15,15 +15,15 @@ from mlflow.genai.alerts.aggregator import (
     floor_bucket,
     sealable_max_bucket_ms,
 )
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     BUCKET_MS,
     MAX_WINDOW_SECONDS,
     METRIC_CATALOGUE,
     AlertRule,
     SeriesKey,
 )
-from mlflow.genai.alerts.sketch import spec_for
-from mlflow.genai.alerts.timescale import setup_timescale
+from mlflow.alerts.sketch import spec_for
+from mlflow.alerts.timescale import setup_timescale
 from mlflow.store.tracking.dbmodels.models import (
     SqlAssessments,
     SqlMetricRollup,
@@ -1161,7 +1161,7 @@ def test_the_longest_window_fits_inside_raw_retention():
     ceiling was briefly set to seven days, four days past retention, and nothing
     failed.
     """
-    from mlflow.genai.alerts.timescale import RAW_RETENTION_MS
+    from mlflow.alerts.timescale import RAW_RETENTION_MS
 
     assert MAX_WINDOW_SECONDS * 1000 <= RAW_RETENTION_MS
 
@@ -1174,7 +1174,7 @@ def test_gap_markers_reach_as_far_back_as_the_longest_window():
     them -- if the cap fell below the longest window, a long rule would silently
     under-count across an outage instead of reporting no-data.
     """
-    from mlflow.genai.alerts.aggregator import MAX_GAP_BUCKETS
+    from mlflow.alerts.aggregator import MAX_GAP_BUCKETS
 
     assert MAX_GAP_BUCKETS == MAX_WINDOW_SECONDS // (BUCKET_MS // 1000)
 
@@ -1186,7 +1186,7 @@ def test_setup_timescale_no_longer_builds_a_daily_tier(store: SqlAlchemyStore):
     consumer is a background job and an unbounded table earning nothing, and the
     hourly tier's ninety-day retention already covers the longest window.
     """
-    import mlflow.genai.alerts.timescale as timescale_module
+    import mlflow.alerts.timescale as timescale_module
 
     source = Path(timescale_module.__file__).read_text(encoding="utf-8")
     # The docstring explains the removal; no statement may create or schedule it.

@@ -4,7 +4,7 @@
  * There is no proto -> TS codegen for these endpoints: alerting is served by
  * hand-rolled JSON handlers (proto regeneration needs Docker and is the
  * productionization step), so these interfaces mirror the dataclasses in
- * `mlflow/genai/alerts/entities.py` field for field.
+ * `mlflow/alerts/entities.py` field for field.
  */
 
 import { defineMessages } from 'react-intl';
@@ -250,7 +250,7 @@ const countLabels = defineMessages({
 
 /**
  * The legal `(metric, dimension, aggregation)` combinations, mirroring
- * `METRIC_CATALOGUE` in `mlflow/genai/alerts/entities.py`.
+ * `METRIC_CATALOGUE` in `mlflow/alerts/entities.py`.
  *
  * One source of truth for the form's dropdowns and the server's validation, so the
  * form cannot offer a combination the evaluator would reject.
@@ -529,7 +529,7 @@ export const alertCountUnitFor = (metricKey: string): AlertThresholdUnit =>
 export const alertCountLabelFor = (metricKey: string): MessageDescriptor =>
   metricSpecFor(metricKey)?.countLabel ?? countLabels.requests;
 
-/** One point on the alert detail chart. See `mlflow/genai/alerts/series.py`. */
+/** One point on the alert detail chart. See `mlflow/alerts/series.py`. */
 export interface AlertSeriesPoint {
   timestamp_ms: number;
   /**

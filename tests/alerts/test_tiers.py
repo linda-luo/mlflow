@@ -7,18 +7,18 @@ unstitched read rather than against a hand-written expectation.
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import BUCKET_MS, MAX_WINDOW_SECONDS, SeriesKey
-from mlflow.genai.alerts.evaluator import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import BUCKET_MS, MAX_WINDOW_SECONDS, SeriesKey
+from mlflow.alerts.evaluator import (
     IncrementalMergeCache,
     WindowAccumulator,
     evaluation_window,
     read_signature,
 )
-from mlflow.genai.alerts.rollup_reader import Bucket, FakeRollupReader
-from mlflow.genai.alerts.sketch import LOG_SKETCH
-from mlflow.genai.alerts.tiers import HOUR_MS, plan_cover, rows_read
-from mlflow.genai.alerts.timescale import RAW_RETENTION_MS
+from mlflow.alerts.rollup_reader import Bucket, FakeRollupReader
+from mlflow.alerts.sketch import LOG_SKETCH
+from mlflow.alerts.tiers import HOUR_MS, plan_cover, rows_read
+from mlflow.alerts.timescale import RAW_RETENTION_MS
 
 SERIES = SeriesKey(dimension_key="TRACES", experiment_id=7, metric_key="latency")
 
@@ -297,7 +297,7 @@ def test_a_reader_without_a_coarse_tier_answers_the_window_from_minutes():
 
 
 def _rule(window_seconds: int = 86_400):
-    from mlflow.genai.alerts.entities import AlertRule
+    from mlflow.alerts.entities import AlertRule
 
     return AlertRule(
         alert_rule_id="rule-1",

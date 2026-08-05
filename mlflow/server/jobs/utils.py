@@ -817,7 +817,7 @@ def register_periodic_tasks(huey_instance) -> None:
     # single connection serialized them for no reason and made the slowest family the
     # floor for every other family's freshness. Each keeps its own lock, so a slow
     # unit still cannot overlap *itself*.
-    from mlflow.genai.alerts.aggregator import rollup_unit_names
+    from mlflow.alerts.aggregator import rollup_unit_names
 
     # Half the one-minute cadence: past this a unit is at real risk of not finishing
     # before its next tick, and its watermark starts to slip.
@@ -828,7 +828,7 @@ def register_periodic_tasks(huey_instance) -> None:
         @huey_instance.lock_task(f"alert-rollup-aggregator-{task_suffix}-lock")
         def alert_rollup_aggregator():
             """Seals the 1-minute rollup buckets that alert rules read."""
-            from mlflow.genai.alerts.aggregator import run_rollup_aggregation
+            from mlflow.alerts.aggregator import run_rollup_aggregation
 
             try:
                 run = run_rollup_aggregation(units=[unit_name])
@@ -871,7 +871,7 @@ def register_periodic_tasks(huey_instance) -> None:
     @huey_instance.lock_task("alert-evaluator-lock")
     def alert_evaluator():
         """Evaluates alert rules whose next_evaluation_at_ms has come due."""
-        from mlflow.genai.alerts.job import run_alert_evaluation
+        from mlflow.alerts.job import run_alert_evaluation
 
         try:
             run_alert_evaluation()

@@ -13,8 +13,8 @@ from opentelemetry.sdk.resources import Resource as OTelResource
 from opentelemetry.sdk.trace import Event as OTelEvent
 from opentelemetry.sdk.trace import ReadableSpan as OTelReadableSpan
 
+from mlflow.alerts.span_errors import extract_span_errors
 from mlflow.entities.span import Span, create_mlflow_span
-from mlflow.genai.alerts.span_errors import extract_span_errors
 from mlflow.store.tracking.dbmodels.models import SqlSpanError
 from mlflow.store.tracking.sqlalchemy_store import SqlAlchemyStore
 from mlflow.tracing.utils import TraceJSONEncoder

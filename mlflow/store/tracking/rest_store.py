@@ -2504,7 +2504,7 @@ class RestStore(
         return self.log_spans(location, spans)
 
     # ------------------------------------------------------------------
-    # Alerting. See mlflow/genai/alerts/ for the entity dataclasses.
+    # Alerting. See mlflow/alerts/ for the entity dataclasses.
     #
     # These exist so the feature is not silently absent for anyone pointing at
     # a remote tracking server -- the store trio is abstract + sqlalchemy +
@@ -2619,7 +2619,7 @@ def _alert_rule_to_dict(rule) -> dict:
 
 
 def _alert_rule_from_dict(payload: dict):
-    from mlflow.genai.alerts.entities import AlertRule
+    from mlflow.alerts.entities import AlertRule
 
     known = {f.name for f in dataclasses.fields(AlertRule)}
     # Unknown keys are dropped rather than raising: a newer server may add
@@ -2628,7 +2628,7 @@ def _alert_rule_from_dict(payload: dict):
 
 
 def _alert_instance_from_dict(payload: dict):
-    from mlflow.genai.alerts.entities import AlertInstance
+    from mlflow.alerts.entities import AlertInstance
 
     known = {f.name for f in dataclasses.fields(AlertInstance)}
     return AlertInstance(**{k: v for k, v in payload.items() if k in known})

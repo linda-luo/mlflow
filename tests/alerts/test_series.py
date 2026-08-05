@@ -1,14 +1,14 @@
 import pytest
 
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts.entities import (
     BUCKET_MS,
     AlertRule,
     SeriesKey,
     derive_evaluation_interval_seconds,
 )
-from mlflow.genai.alerts.evaluator import AlertEvaluator
-from mlflow.genai.alerts.rollup_reader import Bucket, FakeRollupReader
-from mlflow.genai.alerts.series import (
+from mlflow.alerts.evaluator import AlertEvaluator
+from mlflow.alerts.rollup_reader import Bucket, FakeRollupReader
+from mlflow.alerts.series import (
     MAX_SERIES_POINTS,
     choose_step_ms,
     compute_rule_series,

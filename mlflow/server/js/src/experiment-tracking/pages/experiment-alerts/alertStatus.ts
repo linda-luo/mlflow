@@ -320,7 +320,7 @@ export const describeAlertScope = (
 /**
  * How many samples a percentile needs before it means anything.
  *
- * Mirrors `derive_min_sample_count` in `mlflow/genai/alerts/entities.py`. This is
+ * Mirrors `derive_min_sample_count` in `mlflow/alerts/entities.py`. This is
  * what the form *seeds* its minimum-samples input with -- a suggestion the user
  * can raise, lower, or clear to zero. The server applies the same function only
  * when a request omits the field entirely.

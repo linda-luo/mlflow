@@ -1,7 +1,7 @@
 """Sparse sketch histograms — the shared contract between aggregation and evaluation.
 
 A histogram is a map from bucket index to count, holding only *occupied* buckets.
-The bucketing itself lives in :mod:`mlflow.genai.alerts.sketch`; this module is the
+The bucketing itself lives in :mod:`mlflow.alerts.sketch`; this module is the
 arithmetic over it.
 
 Sparse rather than a fixed-width vector because the sketch's index range is
@@ -21,8 +21,8 @@ pairs sorted by index — see :func:`to_pairs` — so the Postgres merge aggrega
 the Python one operate on the same shape.
 """
 
-from mlflow.genai.alerts.entities import Comparator
-from mlflow.genai.alerts.sketch import SKETCH_VERSION, SketchSpec, spec_for
+from mlflow.alerts.entities import Comparator
+from mlflow.alerts.sketch import SKETCH_VERSION, SketchSpec, spec_for
 
 __all__ = [
     "SKETCH_VERSION",

@@ -1,6 +1,6 @@
 """Database-backed :class:`RollupReader` -- the real thing behind the seam.
 
-Drop-in replacement for :class:`~mlflow.genai.alerts.rollup_reader.FakeRollupReader`:
+Drop-in replacement for :class:`~mlflow.alerts.rollup_reader.FakeRollupReader`:
 same two Protocol methods, same :class:`Bucket` return shape, so the evaluator does
 not change when it is swapped in.
 """
@@ -9,11 +9,11 @@ import logging
 
 import sqlalchemy as sa
 
-from mlflow.genai.alerts.aggregator import build_work_units
-from mlflow.genai.alerts.entities import BUCKET_MS, SeriesKey
-from mlflow.genai.alerts.rollup_reader import Bucket, RollupReader
-from mlflow.genai.alerts.sketch import SketchSpec, spec_for
-from mlflow.genai.alerts.tiers import HOUR_MS, CoverSpan, plan_cover
+from mlflow.alerts.aggregator import build_work_units
+from mlflow.alerts.entities import BUCKET_MS, SeriesKey
+from mlflow.alerts.rollup_reader import Bucket, RollupReader
+from mlflow.alerts.sketch import SketchSpec, spec_for
+from mlflow.alerts.tiers import HOUR_MS, CoverSpan, plan_cover
 from mlflow.store.db import db_types
 from mlflow.store.tracking.dbmodels.models import (
     SqlMetricRollup,
@@ -205,7 +205,7 @@ class SqlRollupReader(RollupReader):
         from partially written minutes, and never revisits it. So an hour is only
         trustworthy once our sealing has also passed it by that offset.
         """
-        from mlflow.genai.alerts.timescale import CA_END_OFFSET_MS
+        from mlflow.alerts.timescale import CA_END_OFFSET_MS
 
         try:
             cagg_watermark = session.execute(

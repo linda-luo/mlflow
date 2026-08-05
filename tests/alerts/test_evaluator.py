@@ -4,15 +4,15 @@ import time
 
 import pytest
 
-from mlflow.genai.alerts import histogram as hist
-from mlflow.genai.alerts.entities import (
+from mlflow.alerts import histogram as hist
+from mlflow.alerts.entities import (
     BUCKET_MS,
     AlertInstance,
     AlertRule,
     SeriesKey,
     derive_evaluation_interval_seconds,
 )
-from mlflow.genai.alerts.evaluator import (
+from mlflow.alerts.evaluator import (
     AlertEvaluator,
     Decision,
     IncrementalMergeCache,
@@ -23,9 +23,9 @@ from mlflow.genai.alerts.evaluator import (
     next_due_ms,
     read_signature,
 )
-from mlflow.genai.alerts.rollup_reader import Bucket, FakeRollupReader, aggregate_buckets
-from mlflow.genai.alerts.sketch import LOG_SKETCH
-from mlflow.genai.alerts.state_machine import OPEN_STATES
+from mlflow.alerts.rollup_reader import Bucket, FakeRollupReader, aggregate_buckets
+from mlflow.alerts.sketch import LOG_SKETCH
+from mlflow.alerts.state_machine import OPEN_STATES
 
 MINUTE = 60_000
 HOUR = 3_600_000
