@@ -22,6 +22,7 @@ from sqlalchemy import (
     UnicodeText,
     UniqueConstraint,
 )
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.inspection import inspect
 from sqlalchemy.orm import (
@@ -815,6 +816,18 @@ class SqlTraceInfo(Base):
     DB-backed trace payload generation used for concurrency coordination.
     Defaults to 0.
     """
+    end_time_ms = Column(BigInteger, nullable=True)
+    """
+    Completion time (``timestamp_ms + execution_time_ms``), in milliseconds.
+
+    Materialized rather than generated: SQLite cannot ``ALTER TABLE ADD`` a stored
+    generated column, and the rollup needs this indexed. Written once, when the trace
+    ends, so it cannot drift. Null while a trace is still in progress.
+
+    Rollups bucket by *completion*, not start: start-time bucketing would hold a bucket
+    open until the slowest trace in it finished, which is unbounded for a long-running
+    agent. Completion is a point event, so buckets seal on a fixed schedule.
+    """
 
     __table_args__ = (
         PrimaryKeyConstraint("request_id", name="trace_info_pk"),
@@ -822,6 +835,9 @@ class SqlTraceInfo(Base):
         # which is the default view in the UI. Also every search query should have experiment_id(s)
         # in the where clause.
         Index(f"index_{__tablename__}_experiment_id_timestamp_ms", "experiment_id", "timestamp_ms"),
+        # The rollup scan is time-ordered and crosses experiments, so the index above
+        # (experiment_id-leading) cannot serve it.
+        Index("index_trace_info_end_time_ms", "end_time_ms"),
     )
 
     def to_mlflow_entity(self):
@@ -927,6 +943,17 @@ class SqlTraceMetrics(Base):
     Metric value: `Float`. Could be *null* if not available. Supports both integer values
     (e.g., token counts) and decimal values (e.g., API costs).
     """
+    experiment_id = Column(Integer, nullable=True)
+    """
+    Denormalized from ``trace_info``: `Integer`. Removes the EAV join from the token
+    rollup scan. Write-once, so there is no update-anomaly risk. Nullable because rows
+    written before this column existed cannot be backfilled cheaply.
+    """
+    timestamp_ms = Column(BigInteger, nullable=True)
+    """
+    Trace completion time, denormalized from ``trace_info``: `BigInteger`. Lets the
+    rollup scan bucket without joining.
+    """
     trace_info = relationship(
         "SqlTraceInfo",
         backref=backref("metrics", cascade="all, delete-orphan", passive_deletes=True),
@@ -940,6 +967,7 @@ class SqlTraceMetrics(Base):
     __table_args__ = (
         PrimaryKeyConstraint("request_id", "key", name="trace_metrics_pk"),
         Index(f"index_{__tablename__}_request_id", "request_id"),
+        Index("index_trace_metrics_rollup", "timestamp_ms", "key"),
     )
 
 
@@ -962,6 +990,14 @@ class SqlSpanMetrics(Base):
     """
     Metric value: `Float`. Could be *null* if not available.
     """
+    experiment_id = Column(Integer, nullable=True)
+    """
+    Denormalized from ``trace_info``: `Integer`. Removes the join from the cost rollup.
+    """
+    timestamp_ms = Column(BigInteger, nullable=True)
+    """
+    Span end time, denormalized: `BigInteger`. Lets the cost rollup bucket without joining.
+    """
     span = relationship(
         "SqlSpan",
         backref=backref("metrics", cascade="all, delete-orphan", passive_deletes=True),
@@ -974,6 +1010,7 @@ class SqlSpanMetrics(Base):
     # Composite primary key: (trace_id, span_id, key)
     __table_args__ = (
         PrimaryKeyConstraint("trace_id", "span_id", "key", name="span_metrics_pk"),
+        Index("index_span_metrics_rollup", "timestamp_ms", "key"),
         ForeignKeyConstraint(
             ["trace_id", "span_id"],
             ["spans.trace_id", "spans.span_id"],
@@ -1056,6 +1093,12 @@ class SqlAssessments(Base):
     """
     Assessment metadata stored as JSON: `Text` for complex metadata structures.
     """
+    experiment_id = Column(Integer, nullable=True)
+    """
+    Denormalized from ``trace_info``: `Integer`. The quality rollup already has
+    ``created_timestamp`` to bucket by, so this is the only column it was missing to
+    avoid a join.
+    """
 
     trace_info = relationship("SqlTraceInfo", backref=backref("assessments", cascade="all"))
     """
@@ -1069,6 +1112,7 @@ class SqlAssessments(Base):
         Index(f"index_{__tablename__}_run_id_created_timestamp", "run_id", "created_timestamp"),
         Index(f"index_{__tablename__}_last_updated_timestamp", "last_updated_timestamp"),
         Index(f"index_{__tablename__}_assessment_type", "assessment_type"),
+        Index("index_assessments_rollup", "created_timestamp", "name"),
     )
 
     def to_mlflow_entity(self) -> Assessment:
@@ -2095,6 +2139,10 @@ class SqlSpan(Base):
             "index_spans_experiment_id_type_status", "experiment_id", "type", "status"
         ),  # For type-only and type+status filters
         Index("index_spans_experiment_id_duration", "experiment_id", "duration_ns"),
+        # The rollup scan is time-ordered and crosses experiments, so none of the
+        # experiment_id-leading indexes above can serve it. Mirrors
+        # index_trace_info_end_time_ms.
+        Index("index_spans_end_time_unix_nano", "end_time_unix_nano"),
     )
 
 
@@ -4297,3 +4345,357 @@ class SqlMCPAccessEndpoint(Base):
             creation_timestamp=self.created_at,
             last_updated_timestamp=self.last_updated_at,
         )
+
+
+# Postgres stores histograms as a native fixed-width integer array: the shape never
+# varies, so element-wise merging needs no parsing. Other dialects fall back to JSON.
+_HISTOGRAM_TYPE = sa.JSON().with_variant(postgresql.ARRAY(BigInteger), "postgresql")
+
+
+class SqlSpanError(Base):
+    """
+    One row per (span, exception type) for spans that recorded an exception.
+
+    Written in the ``log_spans`` ingest path. ``is_origin`` marks the span that
+    actually raised, as opposed to the ancestors the exception propagated through,
+    so error counts do not depend on how deeply a user nested their agent.
+    """
+
+    __tablename__ = "span_errors"
+
+    trace_id = Column(String(50), nullable=False)
+    span_id = Column(String(50), nullable=False)
+    exception_type = Column(String(250), nullable=False)
+    """Exception class name, e.g. "TimeoutError"."""
+
+    parent_span_id = Column(String(50), nullable=True)
+    """Parent span, denormalized so origin detection is an indexed lookup rather
+    than a tree walk."""
+
+    is_origin = Column(Boolean, nullable=False, default=True)
+    """False when a descendant already reported this exception type, i.e. this
+    span was only propagating. Aggregation filters on this."""
+
+    span_name = Column(String(500), nullable=False)
+    """Which operation broke, e.g. "search_docs"."""
+
+    span_type = Column(String(50), nullable=True)
+
+    exception_message = Column(String(1000), nullable=True)
+    """Truncated; display only. Never aggregated on."""
+
+    experiment_id = Column(Integer, nullable=False)
+    """Denormalized so the rollup scan needs no join."""
+
+    timestamp_ms = Column(BigInteger, nullable=False)
+    """Span end time, in the same units used for bucketing."""
+
+    __table_args__ = (
+        PrimaryKeyConstraint("trace_id", "span_id", "exception_type", name="span_errors_pk"),
+        ForeignKeyConstraint(
+            ["trace_id", "span_id"],
+            ["spans.trace_id", "spans.span_id"],
+            name="fk_span_errors_span",
+            ondelete="CASCADE",
+        ),
+        # The dedup lookup: "does a child of mine already carry this exception?"
+        Index(
+            "index_span_errors_dedup",
+            "trace_id",
+            "exception_type",
+            "parent_span_id",
+        ),
+        Index(
+            "index_span_errors_experiment_time",
+            "experiment_id",
+            "timestamp_ms",
+            "exception_type",
+        ),
+        # The global rollup scan, which is time-ordered and crosses experiments.
+        Index("index_span_errors_timestamp", "timestamp_ms"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<SqlSpanError ({self.trace_id}, {self.span_id}, {self.exception_type}, "
+            f"origin={self.is_origin})>"
+        )
+
+
+class SqlMetricSeries(Base):
+    """
+    Identity of a rollup series, factored out of the per-bucket rows.
+
+    A bucket row's key drops from ~150 bytes of repeated strings to 16 bytes
+    (series_id + bucket), which is the single largest storage win in the rollup
+    layer.
+    """
+
+    __tablename__ = "metric_series"
+
+    series_id = Column(
+        BigInteger().with_variant(Integer(), "sqlite"), autoincrement=True, nullable=False
+    )
+    """Surrogate key.
+
+    The SQLite variant is load-bearing, not cosmetic: SQLite only auto-assigns a
+    primary key when the column is declared exactly ``INTEGER``, which aliases the
+    rowid. A ``BIGINT`` primary key there is an ordinary NOT NULL column, so every
+    insert without an explicit id fails -- on MLflow's default backend.
+    """
+
+    dimension_key = Column(String(20), nullable=False)
+    """Which dimension this series slices by: TRACES, SPAN_TYPE, SPAN_NAME,
+    SPAN_MODEL, ASSESSMENTS or ERROR."""
+
+    experiment_id = Column(Integer, nullable=False)
+    metric_key = Column(String(250), nullable=False)
+    """latency, total_tokens, total_cost, error_count, assessment_value."""
+
+    dimension_value = Column(String(250), nullable=False, default="")
+    """The member of that dimension, e.g. "OK", "TOOL", "search_docs", "gpt-5".
+
+    Capped at 250 rather than 500 so the unique index below stays inside InnoDB's
+    3072-byte key limit on MySQL under utf8mb4.
+    """
+
+    __table_args__ = (
+        PrimaryKeyConstraint("series_id", name="metric_series_pk"),
+        UniqueConstraint(
+            "dimension_key",
+            "experiment_id",
+            "metric_key",
+            "dimension_value",
+            name="metric_series_identity",
+        ),
+        Index("index_metric_series_experiment", "experiment_id", "metric_key"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<SqlMetricSeries ({self.series_id}, {self.dimension_key}, "
+            f"{self.metric_key}, {self.dimension_value})>"
+        )
+
+
+class SqlMetricRollup(Base):
+    """
+    One sealed 1-minute bucket of one series.
+
+    On Postgres this becomes a Timescale hypertable and the 1h/1d tiers are
+    continuous aggregates built on top of it. Only invertible aggregates are
+    stored -- min/max cannot be un-merged when a bucket leaves a sliding window.
+    """
+
+    __tablename__ = "metric_rollups"
+
+    series_id = Column(
+        BigInteger,
+        ForeignKey("metric_series.series_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    bucket_start_ms = Column(BigInteger, nullable=False)
+    """Inclusive start of the half-open interval [bucket_start_ms, +60000)."""
+
+    count = Column(BigInteger, nullable=False, default=0)
+    """Serves COUNT, AVG's denominator, and the min-sample-count check."""
+
+    sum = Column(sa.types.Float(precision=53), nullable=True)
+    histogram = Column(_HISTOGRAM_TYPE, nullable=True)
+    """Fixed-width count vector. Serves PERCENTILE and exact threshold bounds."""
+
+    boundaries_version = Column(sa.SmallInteger, nullable=True)
+    """Which boundary set produced this histogram. Boundaries cannot change
+    retroactively, so every stored histogram records its own."""
+
+    is_gap = Column(Boolean, nullable=False, default=False)
+    """Aggregation did not run for this bucket. Recorded explicitly because a
+    missing row is indistinguishable from a genuinely quiet minute."""
+
+    __table_args__ = (
+        # Equality column first, range column last: a single-series window read
+        # is then one contiguous scan.
+        PrimaryKeyConstraint("series_id", "bucket_start_ms", name="metric_rollups_pk"),
+        Index("index_metric_rollups_bucket", "bucket_start_ms"),
+    )
+
+    def __repr__(self):
+        return f"<SqlMetricRollup ({self.series_id}, {self.bucket_start_ms}, {self.count})>"
+
+
+class SqlRollupState(Base):
+    """
+    Aggregation watermark for one unit of work.
+
+    A unit is one ``(source, dimension_key)`` scan -- what the
+    aggregator calls a series family. Keyed this finely for three reasons:
+
+    * **Cadence.** Sources arrive on different schedules; assessments in
+      particular land minutes after the traces they score.
+    * **Parallelism.** Units write disjoint series, so nothing orders them and
+      each can be sealed by its own worker.
+    * **Isolation.** A rule reads exactly one family, so it can be evaluated
+      against *that* family's watermark. With a single global watermark, one slow
+      family froze the evaluation window for every rule in the deployment.
+    """
+
+    __tablename__ = "rollup_state"
+
+    source = Column(String(50), nullable=False)
+    """trace_info, trace_metrics, spans, span_metrics, span_errors, assessments."""
+
+    dimension_key = Column(String(20), nullable=False, server_default="")
+    """TRACES | SPAN_TYPE | SPAN_NAME | SPAN_MODEL | ASSESSMENTS | ERROR.
+
+    With ``source`` this is the whole key. A unit may seal several metric keys --
+    ``trace_metrics`` seals five token metrics from one scan -- so the metric is a
+    property of the *series*, not of the watermark."""
+
+    watermark_ms = Column(BigInteger, nullable=False, default=0)
+    """Start of the last bucket sealed for this unit."""
+
+    coverage_start_ms = Column(BigInteger, nullable=True)
+    """First bucket this unit ever sealed -- where trustworthy history begins.
+
+    A window reaching back before this covers a period when nothing was
+    aggregating, and an empty result there means "we were not looking", not "there
+    was no traffic". Without it, a rule whose signal is *absence* fires on every
+    fresh install and on every newly created rule, which is a false alarm at
+    exactly the moment a user is deciding whether to trust the product.
+    """
+
+    last_updated_ms = Column(BigInteger, nullable=True)
+
+    __table_args__ = (PrimaryKeyConstraint("source", "dimension_key", name="rollup_state_pk"),)
+
+    def __repr__(self):
+        return f"<SqlRollupState ({self.source}/{self.dimension_key}, {self.watermark_ms})>"
+
+
+class SqlAlertRule(Base):
+    """
+    A saved metric query plus a predicate.
+
+    Rules are soft-deleted: ``alert_instances`` must outlive the rule, since the
+    record of what fired is exactly what someone wants during a postmortem and
+    a cascade would destroy it.
+    """
+
+    __tablename__ = "alert_rules"
+
+    alert_rule_id = Column(String(36), nullable=False)
+    experiment_id = Column(
+        Integer, ForeignKey("experiments.experiment_id", ondelete="CASCADE"), nullable=False
+    )
+    name = Column(String(256), nullable=False)
+    severity = Column(String(10), nullable=False, default="MEDIUM")
+    enabled = Column(Boolean, nullable=False, default=True)
+
+    metric_key = Column(String(250), nullable=False)
+    dimension_key = Column(String(20), nullable=False)
+    dimension_value = Column(String(250), nullable=True)
+    aggregation = Column(String(20), nullable=False)
+    percentile_value = Column(sa.types.Float(precision=53), nullable=True)
+    comparator = Column(String(4), nullable=False)
+    threshold = Column(sa.types.Float(precision=53), nullable=False)
+    """Snapped to a histogram boundary at write time, which lets most rules
+    decide from exact bounds without touching raw rows."""
+
+    window_seconds = Column(Integer, nullable=False)
+    evaluation_interval_seconds = Column(Integer, nullable=False)
+    sustain_seconds = Column(Integer, nullable=False, default=0)
+    min_sample_count = Column(Integer, nullable=False, default=0)
+
+    last_evaluated_ms = Column(BigInteger, nullable=True)
+    next_evaluation_at_ms = Column(BigInteger, nullable=True)
+    """Materialized rather than computed. ``last_evaluated_ms + interval * 1000``
+    is arithmetic across two columns and no index can seek it."""
+
+    last_sample_count = Column(Integer, nullable=True)
+    deleted_at_ms = Column(BigInteger, nullable=True)
+
+    channels = Column(Text, nullable=True)
+    created_by = Column(String(255), nullable=True)
+    creation_timestamp = Column(BigInteger, nullable=True)
+    last_updated_timestamp = Column(BigInteger, nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("alert_rule_id", name="alert_rules_pk"),
+        # Names are unique among *live* rules only, enforced by the partial index
+        # `index_alert_rules_experiment_name` in the migration -- declared there
+        # rather than here because MySQL has no partial indexes and would emit an
+        # unconditional unique index instead, which is the very thing being fixed.
+        # A plain constraint made a name unusable forever once a rule wearing it
+        # was deleted, so a typo permanently occupied it.
+        Index("index_alert_rules_due", "enabled", "next_evaluation_at_ms"),
+        Index("index_alert_rules_experiment", "experiment_id"),
+    )
+
+    def __repr__(self):
+        return f"<SqlAlertRule ({self.alert_rule_id}, {self.name}, {self.metric_key})>"
+
+
+class SqlAlertInstance(Base):
+    """
+    One firing episode. A rule that fired in January and again in March has two.
+
+    Instances are never erased: once FIRED, an instance stays visible until a
+    person dismisses it. A sustained recovery moves it to INACTIVE, which is
+    still unacknowledged and still dismissible -- the spike still happened -- but
+    no longer blocks the rule from opening the next episode.
+    """
+
+    __tablename__ = "alert_instances"
+
+    alert_instance_id = Column(String(36), nullable=False)
+    alert_rule_id = Column(String(36), ForeignKey("alert_rules.alert_rule_id"), nullable=False)
+    """Deliberately no ON DELETE CASCADE -- rules soft-delete so their history
+    survives."""
+
+    experiment_id = Column(Integer, nullable=False)
+    """Denormalized for the inbox query, which is scoped by experiment."""
+
+    state = Column(String(20), nullable=False)
+    """PENDING, FIRED, INACTIVE or DISMISSED.
+
+    Only PENDING and FIRED are "open" for the purposes of
+    ``index_alert_instances_open`` below."""
+
+    started_at_ms = Column(BigInteger, nullable=False)
+    fired_at_ms = Column(BigInteger, nullable=True)
+    """Null when the condition cleared before it sustained, in which case nothing
+    was ever notified."""
+
+    dismissed_at_ms = Column(BigInteger, nullable=True)
+    dismissed_by = Column(String(255), nullable=True)
+    """A user, or a reserved "system:" actor for rule edits and disables."""
+
+    healthy_since_ms = Column(BigInteger, nullable=True)
+    """Start of the current unbroken run of healthy evaluations, or null.
+
+    Cleared by the next breaching evaluation, so it doubles as the "has this been
+    healthy before?" flag that stops a single healthy blip closing an instance,
+    and -- once the instance is INACTIVE -- as the time it recovered."""
+
+    observed_value = Column(sa.types.Float(precision=53), nullable=True)
+    peak_value = Column(sa.types.Float(precision=53), nullable=True)
+    """Worst value seen. This is what the notification quotes."""
+
+    threshold = Column(sa.types.Float(precision=53), nullable=True)
+    """Snapshotted at firing time so later rule edits do not rewrite history."""
+
+    sample_count = Column(Integer, nullable=True)
+    window_start_ms = Column(BigInteger, nullable=True)
+    window_end_ms = Column(BigInteger, nullable=True)
+    exemplar_trace_ids = Column(Text, nullable=True)
+    """A handful of trace IDs, stored rather than queried so the evidence
+    survives trace archival."""
+
+    __table_args__ = (
+        PrimaryKeyConstraint("alert_instance_id", name="alert_instances_pk"),
+        Index("index_alert_instances_inbox", "experiment_id", "state", "started_at_ms"),
+        Index("index_alert_instances_rule", "alert_rule_id", "started_at_ms"),
+    )
+
+    def __repr__(self):
+        return f"<SqlAlertInstance ({self.alert_instance_id}, {self.alert_rule_id}, {self.state})>"

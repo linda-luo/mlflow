@@ -1,0 +1,95 @@
+# Alerting demo stack: real Postgres + TimescaleDB, real job scheduler, real traffic.
+#
+# Exists because two things cannot be exercised on Windows:
+#   * the periodic aggregator/evaluator -- MLflow's job backend refuses to start
+#     on Windows outright (`os.name == "nt"`), so buckets never seal on a schedule
+#   * TimescaleDB -- the hypertable, hist_merge, the continuous aggregates and the
+#     retention policies are Postgres-only
+#
+#   docker compose -f dev/alerting/compose.yml up --build
+#
+# Docs for this stack and the load-test harness live with the code they
+# exercise: mlflow/alerts/README.md
+#   -> http://localhost:5000
+name: mlflow-alerting-demo
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    environment:
+      POSTGRES_DB: mlflow
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+    ports:
+      # 5433 on the host so a local Postgres on 5432 is left alone.
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow -d mlflow"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  mlflow:
+    build:
+      context: ../..
+      dockerfile: dev/alerting/Dockerfile
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    volumes:
+      - ../..:/mlflow/home
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@timescaledb:5432/mlflow
+      # Defaults to true, but set explicitly: this is the whole point of the stack.
+      MLFLOW_SERVER_ENABLE_JOB_EXECUTION: "true"
+      # More than one evaluator thread, which is the other thing Windows cannot
+      # exercise. Postgres only: SQLite has a single writer and clamps this to 1.
+      MLFLOW_ALERT_EVALUATOR_THREADS: "4"
+      # Set to "0" to bring the stack up with no demo rules -- migrations, the
+      # Timescale tiers and the experiment still run. Deleting the rules in the UI
+      # is not equivalent: bootstrap re-seeds them on the next restart, because
+      # soft-deleted rules do not come back from `list_alert_rules`.
+      DEMO_SEED_RULES: "${DEMO_SEED_RULES:-1}"
+    ports:
+      # 5002 on the host: a stale MLflow server from an earlier session is still
+      # listening on 5000 and serving pre-revert code.
+      - "5002:5000"
+    command: ["bash", "dev/alerting/start.sh"]
+    healthcheck:
+      # Gates the traffic generator below. Constructing a SqlAlchemyStore runs the
+      # alembic migrations, so any second process doing it concurrently races this
+      # one to CREATE TABLE and Postgres kills the loser on a duplicate sequence
+      # name. Schema creation has to be serialized, not merely ordered.
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+
+  traffic:
+    build:
+      context: ../..
+      dockerfile: dev/alerting/Dockerfile
+    depends_on:
+      # Waits for the server to be serving, which means bootstrap has finished
+      # migrating. Depending on timescaledb alone is not enough -- both services
+      # would then migrate concurrently and one would die.
+      mlflow:
+        condition: service_healthy
+    volumes:
+      - ../..:/mlflow/home
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@timescaledb:5432/mlflow
+      # Minutes of healthy traffic before the agent starts degrading, so you can
+      # watch a rule cross from green to PENDING to FIRED rather than arriving
+      # to an already-broken system.
+      # Kept below the rules' 5-minute window, so the first evaluation already sees
+      # mostly degraded traffic rather than averaging it away against healthy data.
+      DEMO_HEALTHY_MINUTES: "${DEMO_HEALTHY_MINUTES:-2}"
+      # Traces per second into the seeded rules' experiment. "0" keeps the demo's
+      # own low, readable rate (~1/s). Raise it to drive the seeded rules under
+      # volume -- unlike the load test, this path fabricates latency, so the
+      # latency rules actually breach.
+      DEMO_TRACES_PER_SECOND: "${DEMO_TRACES_PER_SECOND:-0}"
+    command: ["python", "dev/alerting/traffic.py"]

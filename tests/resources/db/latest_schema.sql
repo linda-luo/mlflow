@@ -112,6 +112,17 @@ CREATE TABLE mcp_servers (
 )
 
 
+CREATE TABLE metric_series (
+	series_id INTEGER NOT NULL,
+	dimension_key VARCHAR(20) NOT NULL,
+	experiment_id INTEGER NOT NULL,
+	metric_key VARCHAR(250) NOT NULL,
+	dimension_value VARCHAR(250) DEFAULT '' NOT NULL,
+	CONSTRAINT metric_series_pk PRIMARY KEY (series_id),
+	CONSTRAINT metric_series_identity UNIQUE (dimension_key, experiment_id, metric_key, dimension_value)
+)
+
+
 CREATE TABLE registered_models (
 	name VARCHAR(256) NOT NULL,
 	creation_time BIGINT,
@@ -119,6 +130,16 @@ CREATE TABLE registered_models (
 	description VARCHAR(5000),
 	workspace VARCHAR(63) DEFAULT 'default' NOT NULL,
 	CONSTRAINT registered_model_pk PRIMARY KEY (workspace, name)
+)
+
+
+CREATE TABLE rollup_state (
+	source VARCHAR(50) NOT NULL,
+	dimension_key VARCHAR(20) DEFAULT '' NOT NULL,
+	watermark_ms BIGINT DEFAULT '0' NOT NULL,
+	coverage_start_ms BIGINT,
+	last_updated_ms BIGINT,
+	CONSTRAINT rollup_state_pk PRIMARY KEY (source, dimension_key)
 )
 
 
@@ -164,6 +185,36 @@ CREATE TABLE workspaces (
 	trace_archival_location TEXT,
 	trace_archival_retention VARCHAR(32),
 	CONSTRAINT workspaces_pk PRIMARY KEY (name)
+)
+
+
+CREATE TABLE alert_rules (
+	alert_rule_id VARCHAR(36) NOT NULL,
+	experiment_id INTEGER NOT NULL,
+	name VARCHAR(256) NOT NULL,
+	severity VARCHAR(10) DEFAULT 'MEDIUM' NOT NULL,
+	enabled BOOLEAN DEFAULT 1 NOT NULL,
+	metric_key VARCHAR(250) NOT NULL,
+	dimension_key VARCHAR(20) NOT NULL,
+	dimension_value VARCHAR(250),
+	aggregation VARCHAR(20) NOT NULL,
+	percentile_value FLOAT,
+	comparator VARCHAR(4) NOT NULL,
+	threshold FLOAT NOT NULL,
+	window_seconds INTEGER NOT NULL,
+	evaluation_interval_seconds INTEGER NOT NULL,
+	sustain_seconds INTEGER DEFAULT '0' NOT NULL,
+	min_sample_count INTEGER DEFAULT '0' NOT NULL,
+	last_evaluated_ms BIGINT,
+	next_evaluation_at_ms BIGINT,
+	last_sample_count INTEGER,
+	deleted_at_ms BIGINT,
+	channels TEXT,
+	created_by VARCHAR(255),
+	creation_timestamp BIGINT,
+	last_updated_timestamp BIGINT,
+	CONSTRAINT alert_rules_pk PRIMARY KEY (alert_rule_id),
+	CONSTRAINT fk_alert_rules_experiment FOREIGN KEY(experiment_id) REFERENCES experiments (experiment_id) ON DELETE CASCADE
 )
 
 
@@ -334,6 +385,19 @@ CREATE TABLE mcp_server_versions (
 )
 
 
+CREATE TABLE metric_rollups (
+	series_id BIGINT NOT NULL,
+	bucket_start_ms BIGINT NOT NULL,
+	count BIGINT DEFAULT '0' NOT NULL,
+	sum FLOAT,
+	histogram JSON,
+	boundaries_version SMALLINT,
+	is_gap BOOLEAN DEFAULT 0 NOT NULL,
+	CONSTRAINT metric_rollups_pk PRIMARY KEY (series_id, bucket_start_ms),
+	CONSTRAINT fk_metric_rollups_series FOREIGN KEY(series_id) REFERENCES metric_series (series_id) ON DELETE CASCADE
+)
+
+
 CREATE TABLE model_definitions (
 	model_definition_id VARCHAR(36) NOT NULL,
 	name VARCHAR(255) NOT NULL,
@@ -448,6 +512,7 @@ CREATE TABLE trace_info (
 	request_preview VARCHAR(1000),
 	response_preview VARCHAR(1000),
 	db_payload_generation INTEGER DEFAULT '0' NOT NULL,
+	end_time_ms BIGINT,
 	CONSTRAINT trace_info_pk PRIMARY KEY (request_id),
 	CONSTRAINT fk_trace_info_experiment_id FOREIGN KEY(experiment_id) REFERENCES experiments (experiment_id) ON DELETE CASCADE
 )
@@ -459,6 +524,28 @@ CREATE TABLE webhook_events (
 	action VARCHAR(50) NOT NULL,
 	CONSTRAINT webhook_event_pk PRIMARY KEY (webhook_id, entity, action),
 	FOREIGN KEY(webhook_id) REFERENCES webhooks (webhook_id) ON DELETE CASCADE
+)
+
+
+CREATE TABLE alert_instances (
+	alert_instance_id VARCHAR(36) NOT NULL,
+	alert_rule_id VARCHAR(36) NOT NULL,
+	experiment_id INTEGER NOT NULL,
+	state VARCHAR(20) NOT NULL,
+	started_at_ms BIGINT NOT NULL,
+	fired_at_ms BIGINT,
+	dismissed_at_ms BIGINT,
+	dismissed_by VARCHAR(255),
+	healthy_since_ms BIGINT,
+	observed_value FLOAT,
+	peak_value FLOAT,
+	threshold FLOAT,
+	sample_count INTEGER,
+	window_start_ms BIGINT,
+	window_end_ms BIGINT,
+	exemplar_trace_ids TEXT,
+	CONSTRAINT alert_instances_pk PRIMARY KEY (alert_instance_id),
+	CONSTRAINT fk_alert_instances_rule FOREIGN KEY(alert_rule_id) REFERENCES alert_rules (alert_rule_id)
 )
 
 
@@ -479,6 +566,7 @@ CREATE TABLE assessments (
 	overrides VARCHAR(50),
 	valid BOOLEAN NOT NULL,
 	assessment_metadata TEXT,
+	experiment_id INTEGER,
 	CONSTRAINT assessments_pk PRIMARY KEY (assessment_id),
 	CONSTRAINT fk_assessments_trace_id FOREIGN KEY(trace_id) REFERENCES trace_info (request_id) ON DELETE CASCADE
 )
@@ -722,6 +810,8 @@ CREATE TABLE trace_metrics (
 	request_id VARCHAR(50) NOT NULL,
 	key VARCHAR(250) NOT NULL,
 	value FLOAT,
+	experiment_id INTEGER,
+	timestamp_ms BIGINT,
 	CONSTRAINT trace_metrics_pk PRIMARY KEY (request_id, key),
 	CONSTRAINT fk_trace_metrics_request_id FOREIGN KEY(request_id) REFERENCES trace_info (request_id) ON DELETE CASCADE
 )
@@ -764,11 +854,29 @@ CREATE TABLE guardrails (
 )
 
 
+CREATE TABLE span_errors (
+	trace_id VARCHAR(50) NOT NULL,
+	span_id VARCHAR(50) NOT NULL,
+	exception_type VARCHAR(250) NOT NULL,
+	parent_span_id VARCHAR(50),
+	is_origin BOOLEAN DEFAULT 1 NOT NULL,
+	span_name VARCHAR(500) NOT NULL,
+	span_type VARCHAR(50),
+	exception_message VARCHAR(1000),
+	experiment_id INTEGER NOT NULL,
+	timestamp_ms BIGINT NOT NULL,
+	CONSTRAINT span_errors_pk PRIMARY KEY (trace_id, span_id, exception_type),
+	CONSTRAINT fk_span_errors_span FOREIGN KEY(trace_id, span_id) REFERENCES spans (trace_id, span_id) ON DELETE CASCADE
+)
+
+
 CREATE TABLE span_metrics (
 	trace_id VARCHAR(50) NOT NULL,
 	span_id VARCHAR(50) NOT NULL,
 	key VARCHAR(250) NOT NULL,
 	value FLOAT,
+	experiment_id INTEGER,
+	timestamp_ms BIGINT,
 	CONSTRAINT span_metrics_pk PRIMARY KEY (trace_id, span_id, key),
 	CONSTRAINT fk_span_metrics_span FOREIGN KEY(trace_id, span_id) REFERENCES spans (trace_id, span_id) ON DELETE CASCADE
 )

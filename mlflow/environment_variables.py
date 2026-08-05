@@ -1403,6 +1403,16 @@ MLFLOW_SERVER_GRAPHQL_MAX_ALIASES = _EnvironmentVariable(
 )
 
 
+#: Number of threads the alert evaluator spreads a cycle's read groups over.
+#: Evaluation is almost entirely spent waiting on the database, so threads overlap
+#: that wait; the ceiling is the SQLAlchemy connection pool (15 by default for the
+#: whole process, shared with the periodic-task consumer and every rollup task), so
+#: raising this much past 8 trades parallelism for pool-timeout errors. Forced to 1
+#: on SQLite, which permits a single writer.
+#: (default: ``1``)
+MLFLOW_ALERT_EVALUATOR_THREADS = _EnvironmentVariable("MLFLOW_ALERT_EVALUATOR_THREADS", int, 1)
+
+
 #: Whether to disable schema details in error messages for MLflow schema enforcement.
 #: (default: ``False``)
 MLFLOW_DISABLE_SCHEMA_DETAILS = _BooleanEnvironmentVariable("MLFLOW_DISABLE_SCHEMA_DETAILS", False)

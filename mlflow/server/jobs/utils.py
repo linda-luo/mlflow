@@ -5,6 +5,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -809,3 +810,72 @@ def register_periodic_tasks(huey_instance) -> None:
         "Registered trace_archival_scheduler periodic task (polls every 1 minute and "
         "no-ops when trace archival is disabled or unconfigured)"
     )
+
+    # One task per rollup *unit* -- a (source, dimension_key) family --
+    # rather than one task for everything. Units have separate watermarks and write
+    # disjoint series, so nothing orders them; running them under a single lock on a
+    # single connection serialized them for no reason and made the slowest family the
+    # floor for every other family's freshness. Each keeps its own lock, so a slow
+    # unit still cannot overlap *itself*.
+    from mlflow.alerts.aggregator import rollup_unit_names
+
+    # Half the one-minute cadence: past this a unit is at real risk of not finishing
+    # before its next tick, and its watermark starts to slip.
+    _ROLLUP_SLOW_UNIT_SECONDS = 30.0
+
+    def _register_rollup_unit_task(unit_name: str, task_suffix: str) -> None:
+        @huey_instance.periodic_task(crontab(minute="*/1"), name=f"alert_rollup_{task_suffix}")
+        @huey_instance.lock_task(f"alert-rollup-aggregator-{task_suffix}-lock")
+        def alert_rollup_aggregator():
+            """Seals the 1-minute rollup buckets that alert rules read."""
+            from mlflow.alerts.aggregator import run_rollup_aggregation
+
+            try:
+                run = run_rollup_aggregation(units=[unit_name])
+            except Exception as e:
+                _logger.exception(f"Alert rollup aggregation failed for {unit_name}: {e!r}")
+            else:
+                if not run.sealed_bucket_count:
+                    return
+                # Measured rather than assumed: this is what showed the upsert, not
+                # the scan, to be the cost that scales. Promoted to a warning when a
+                # unit approaches its own budget, because it runs every minute and
+                # taking a large fraction of that means its watermark is about to
+                # fall behind -- which degrades every rule reading that family. Worth
+                # seeing without anyone having enabled debug logging first.
+                if run.total_seconds >= _ROLLUP_SLOW_UNIT_SECONDS:
+                    _logger.warning(
+                        "Alert rollup unit is slow enough to risk falling behind: %s",
+                        run.timing_summary(),
+                    )
+                else:
+                    _logger.debug("Alert rollup timing: %s", run.timing_summary())
+
+    _rollup_units = rollup_unit_names()
+    for _unit_name in _rollup_units:
+        # Task and lock names have to be identifier-safe, and a metric key is
+        # user-adjacent enough not to be trusted as one.
+        _suffix = re.sub(r"[^0-9a-zA-Z]+", "_", _unit_name).strip("_").lower()
+        _register_rollup_unit_task(_unit_name, _suffix)
+
+    _logger.info(
+        "Registered %d alert_rollup_* periodic tasks, one per series family "
+        "(each runs every 1 minute)",
+        len(_rollup_units),
+    )
+
+    # Separate from the aggregator on purpose: a slow evaluation must not delay
+    # sealing. A late evaluation is merely late, but a bucket that misses its
+    # window is wrong permanently.
+    @huey_instance.periodic_task(crontab(minute="*/1"))
+    @huey_instance.lock_task("alert-evaluator-lock")
+    def alert_evaluator():
+        """Evaluates alert rules whose next_evaluation_at_ms has come due."""
+        from mlflow.alerts.job import run_alert_evaluation
+
+        try:
+            run_alert_evaluation()
+        except Exception as e:
+            _logger.exception(f"Alert evaluation failed: {e!r}")
+
+    _logger.info("Registered alert_evaluator periodic task (runs every 1 minute)")

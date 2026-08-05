@@ -29,6 +29,7 @@ from mlflow.utils.crypto import KEKManager, _decrypt_secret
 _SqlAlchemyStatement = TypeVar("_SqlAlchemyStatement", Select, Query)
 
 import mlflow.store.db.utils
+from mlflow.alerts.span_errors import extract_span_errors
 from mlflow.entities import (
     Assessment,
     DatasetInput,
@@ -128,6 +129,8 @@ from mlflow.store.tracking import (
 )
 from mlflow.store.tracking.abstract_store import AbstractStore
 from mlflow.store.tracking.dbmodels.models import (
+    SqlAlertInstance,
+    SqlAlertRule,
     SqlAssessments,
     SqlDataset,
     SqlEntityAssociation,
@@ -3616,6 +3619,13 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 experiment_id=trace_info.experiment_id,
                 timestamp_ms=trace_info.request_time,
                 execution_time_ms=trace_info.execution_duration,
+                # Completion time, materialized for the rollup scan. Rollups bucket
+                # by completion rather than start: a start-time bucket would stay
+                # open until the slowest trace in it finished, which is unbounded
+                # for a long-running agent.
+                end_time_ms=_completion_time_ms(
+                    trace_info.request_time, trace_info.execution_duration
+                ),
                 status=trace_info.state.value,
                 client_request_id=trace_info.client_request_id,
                 request_preview=trace_info.request_preview,
@@ -3668,7 +3678,15 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                     for k, v in sorted(request_metadata.items())
                 ]
                 sql_trace_info.metrics = [
-                    SqlTraceMetrics(request_id=trace_id, key=k, value=v)
+                    SqlTraceMetrics(
+                        request_id=trace_id,
+                        key=k,
+                        value=v,
+                        # Denormalized so the token rollup never joins back to
+                        # trace_info. Write-once, so it cannot drift.
+                        experiment_id=int(trace_info.experiment_id),
+                        timestamp_ms=sql_trace_info.end_time_ms,
+                    )
                     for k, v in sorted(trace_metrics.items())
                 ]
                 session.add(sql_trace_info)
@@ -3724,6 +3742,9 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 db_sql_trace_info.experiment_id = trace_info.experiment_id
                 db_sql_trace_info.timestamp_ms = trace_info.request_time
                 db_sql_trace_info.execution_time_ms = trace_info.execution_duration
+                db_sql_trace_info.end_time_ms = _completion_time_ms(
+                    trace_info.request_time, trace_info.execution_duration
+                )
                 db_sql_trace_info.status = trace_info.state.value
                 db_sql_trace_info.client_request_id = trace_info.client_request_id
                 if trace_info.request_preview is not None:
@@ -3743,7 +3764,18 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 for k, v in sorted(request_metadata.items()):
                     session.merge(SqlTraceMetadata(request_id=trace_id, key=k, value=v))
                 for k, v in sorted(trace_metrics.items()):
-                    session.merge(SqlTraceMetrics(request_id=trace_id, key=k, value=v))
+                    # `merge` copies every attribute of the given object onto the
+                    # existing row, so the denormalized columns have to be set here
+                    # too or an upsert would null them back out.
+                    session.merge(
+                        SqlTraceMetrics(
+                            request_id=trace_id,
+                            key=k,
+                            value=v,
+                            experiment_id=int(trace_info.experiment_id),
+                            timestamp_ms=db_sql_trace_info.end_time_ms,
+                        )
+                    )
                 session.flush()
                 sql_trace_info = self._get_sql_trace_info(
                     session,
@@ -4577,6 +4609,17 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
         with self.ManagedSessionMaker(read_only=False) as session:
             self._validate_trace_accessible(session, assessment.trace_id)
             sql_assessment = SqlAssessments.from_mlflow_entity(assessment)
+            # Denormalized from the trace so the quality rollup scans `assessments`
+            # alone -- it already has `created_timestamp` to bucket by, and this was
+            # the only column it was missing. A PK lookup, and write-once.
+            trace_experiment_id = (
+                session
+                .query(SqlTraceInfo.experiment_id)
+                .filter(SqlTraceInfo.request_id == assessment.trace_id)
+                .scalar()
+            )
+            if trace_experiment_id is not None:
+                sql_assessment.experiment_id = trace_experiment_id
 
             if sql_assessment.overrides:
                 update_count = (
@@ -5208,6 +5251,15 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                             "span_id": span.span_id,
                             "key": cost_key,
                             "value": float(cost_value),
+                            # Denormalized for the cost rollup, which scans
+                            # span_metrics alone. experiment_id is filled in below,
+                            # once the trace infos are resolved -- one call can
+                            # touch traces living in different experiments, so it
+                            # cannot be taken from `location`.
+                            "experiment_id": None,
+                            "timestamp_ms": (
+                                span.end_time_ns // 1_000_000 if span.end_time_ns else None
+                            ),
                         })
 
                 if span.parent_id is None:
@@ -5282,6 +5334,10 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                             execution_time_ms=(
                                 (agg.max_end_ms - agg.min_start_ms) if agg.max_end_ms else None
                             ),
+                            # Completion time for the rollup scan; equals the last
+                            # span end, which is what `execution_time_ms` is derived
+                            # from just above.
+                            end_time_ms=agg.max_end_ms or None,
                             status=agg.trace_status,
                             client_request_id=None,
                         )
@@ -5332,13 +5388,27 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             # Keep downstream per-trace updates aligned with the surviving span/metric rows.
             all_trace_ids = [trace_id for trace_id in all_trace_ids if trace_id in existing_traces]
 
-            # Fill in experiment_id on span rows now that we have trace infos
+            # Fill in experiment_id on span and span-metric rows now that we have
+            # trace infos. Resolved per trace rather than from `location`: a trace
+            # created by an earlier call may live in a different experiment.
             for row in all_span_rows:
+                row["experiment_id"] = existing_traces[row["trace_id"]].experiment_id
+            for row in all_metric_rows:
                 row["experiment_id"] = existing_traces[row["trace_id"]].experiment_id
 
             # --- Phase 3: Bulk upsert all spans and metrics (2 queries) ---
             _bulk_upsert(session, SqlSpan, all_span_rows)
             _bulk_upsert(session, SqlSpanMetrics, all_metric_rows)
+
+            # Must follow the span upsert: span_errors has a (trace_id, span_id)
+            # foreign key into spans. Spans whose trace was dropped above are absent
+            # from `existing_traces` and are skipped. experiment_id is resolved per
+            # trace for the same reason as the rows above.
+            extract_span_errors(
+                session,
+                spans,
+                {tid: t.experiment_id for tid, t in existing_traces.items()},
+            )
 
             # --- Phase 4: Batch-fetch existing metadata records (up to 3 queries) ---
             trace_ids_with_token_usage = [
@@ -5480,17 +5550,25 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                     )
                     update_dict[SqlTraceInfo.timestamp_ms] = timestamp_update_expr
                 if max_end_ms is not None and trace_id not in finalized_trace_ids:
-                    update_dict[SqlTraceInfo.execution_time_ms] = (
-                        case(
-                            (
-                                (SqlTraceInfo.timestamp_ms + SqlTraceInfo.execution_time_ms)
-                                > max_end_ms,
-                                SqlTraceInfo.timestamp_ms + SqlTraceInfo.execution_time_ms,
-                            ),
-                            else_=max_end_ms,
-                        )
-                        - timestamp_update_expr
+                    # The trace's completion time after this batch: the later of what
+                    # is stored and this batch's last span end. A NULL stored
+                    # execution time makes the comparison NULL, which falls to the
+                    # else branch -- the same behavior the duration update has always
+                    # had.
+                    end_time_update_expr = case(
+                        (
+                            (SqlTraceInfo.timestamp_ms + SqlTraceInfo.execution_time_ms)
+                            > max_end_ms,
+                            SqlTraceInfo.timestamp_ms + SqlTraceInfo.execution_time_ms,
+                        ),
+                        else_=max_end_ms,
                     )
+                    update_dict[SqlTraceInfo.execution_time_ms] = (
+                        end_time_update_expr - timestamp_update_expr
+                    )
+                    # Materialized alongside the duration so the rollup's
+                    # completion-time scan never has to compute it.
+                    update_dict[SqlTraceInfo.end_time_ms] = end_time_update_expr
 
                 # If trace status is IN_PROGRESS or unspecified, check for root span to update it
                 if sql_trace_info.status in (
@@ -5574,7 +5652,16 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 for key, value in sorted(metadata_writes.items()):
                     session.merge(SqlTraceMetadata(request_id=trace_id, key=key, value=value))
                 for key, value in sorted(metric_writes.items()):
-                    session.merge(SqlTraceMetrics(request_id=trace_id, key=key, value=value))
+                    session.merge(
+                        SqlTraceMetrics(
+                            request_id=trace_id,
+                            key=key,
+                            value=value,
+                            # Per trace, not from `location`: see the span rows above.
+                            experiment_id=sql_trace_info.experiment_id,
+                            timestamp_ms=_sql_trace_completion_time_ms(sql_trace_info, max_end_ms),
+                        )
+                    )
 
                 if update_dict:
                     # `trace_id` was selected through workspace-scoped reads earlier in this
@@ -7780,6 +7867,7 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
             trace_start_time_ms = sql_trace_info.timestamp_ms
             execution_time_ms = timestamp_ms - trace_start_time_ms
             sql_trace_info.execution_time_ms = execution_time_ms
+            sql_trace_info.end_time_ms = timestamp_ms
             sql_trace_info.status = status
             session.merge(sql_trace_info)
             # Merge metadata in sorted key order so concurrent writers acquire the
@@ -9263,6 +9351,859 @@ class SqlAlchemyStore(SqlAlchemyMCPServerRegistryMixin, SqlAlchemyGatewayStoreMi
                 row.completed_time_ms = now_ms
             session.flush()
             return row.to_mlflow_entity()
+
+    # ------------------------------------------------------------------
+    # Alerting: see mlflow/alerts/ for the entity dataclasses, the
+    # metric catalogue and the histogram helpers.
+    #
+    # `alert_rules` is workspace-scoped through a join to `experiments`
+    # (`_get_query`), and so are `alert_instances` and `metric_series` via
+    # their denormalized `experiment_id`. Evaluation-side operations (leasing
+    # due rules, opening instances) are not here: they need dialect-specific
+    # SQL and only ever run in-process on the server.
+    #
+    # `mlflow.alerts` is imported lazily in the methods below. Not to
+    # break an import cycle -- this module already imports `mlflow.genai.judges`
+    # and `mlflow.genai.scorers` at the top, so `mlflow.genai` is fully loaded
+    # either way, and `span_errors` is imported at module level for that reason.
+    # It is to keep `aggregator` and `evaluator` (and the sqlalchemy and dbmodels
+    # they pull in) off the import path of a store that does not otherwise need
+    # them, so an import added on the alerting side cannot reach back here and
+    # close a cycle that does not exist today.
+    # ------------------------------------------------------------------
+
+    def _alert_rule_query(self, session, include_deleted=False):
+        query = self._get_query(session, SqlAlertRule)
+        if not include_deleted:
+            # Soft-deleted rules disappear from get/list and from the due-rule
+            # scan, but their instances stay readable.
+            query = query.filter(SqlAlertRule.deleted_at_ms.is_(None))
+        return query
+
+    def _get_sql_alert_rule(self, session, alert_rule_id, *, for_update=False):
+        query = self._alert_rule_query(session).filter(SqlAlertRule.alert_rule_id == alert_rule_id)
+        if for_update:
+            query = query.with_for_update()
+        sql_rule = query.one_or_none()
+        if sql_rule is None:
+            raise MlflowException(
+                f"Alert rule with id '{alert_rule_id}' not found.",
+                error_code=RESOURCE_DOES_NOT_EXIST,
+            )
+        return sql_rule
+
+    def _close_open_alert_instances(self, session, alert_rule_id, dismissed_by, now_ms):
+        """Close every undismissed instance of a rule with a reserved system actor.
+
+        Used when an edit changes *what* the rule measures (or disables it):
+        leaving the instance open would attribute new evidence to an episode
+        that was about something else.
+
+        DISMISSED, never INACTIVE, and for two reasons. INACTIVE means "the
+        metric recovered", which is a claim about the data -- these instances are
+        being closed because the *user* changed the rule, and nothing is known
+        about whether the condition cleared. And INACTIVE still asks to be
+        acknowledged, so routing a rule deletion through it would leave a row
+        nothing will ever update again, for a rule that no longer exists.
+        ``dismissed_by`` carries the distinction from a human acknowledgement.
+
+        INACTIVE instances are closed too: an unacknowledged row for a rule that
+        now measures something else is just as unactionable as a FIRED one.
+        """
+        rows = (
+            session
+            .query(SqlAlertInstance)
+            .filter(
+                SqlAlertInstance.alert_rule_id == alert_rule_id,
+                SqlAlertInstance.state.in_(_UNDISMISSED_ALERT_STATES),
+            )
+            .all()
+        )
+        for row in rows:
+            row.state = "DISMISSED"
+            row.dismissed_at_ms = now_ms
+            row.dismissed_by = dismissed_by
+        return len(rows)
+
+    def _assert_no_open_alert_instance(self, session, alert_rule_id):
+        """Guard for the at-most-one-open-instance rule on MySQL.
+
+        Postgres and SQLite enforce this with the partial unique index
+        ``index_alert_instances_open``; MySQL has no partial indexes, so the
+        check has to happen here. Call this from any path that opens an
+        instance, immediately before the insert, inside the same transaction.
+
+        Scoped to ``_OPEN_ALERT_STATES`` so it agrees with that index exactly --
+        including on INACTIVE, which neither of them counts. A recovered instance
+        must not stop the next episode from opening, and if this guard and the
+        index ever disagreed the same rule would behave differently on MySQL.
+        """
+        if self.db_type != MYSQL:
+            return
+        existing = (
+            session
+            .query(SqlAlertInstance.alert_instance_id)
+            .filter(
+                SqlAlertInstance.alert_rule_id == alert_rule_id,
+                SqlAlertInstance.state.in_(_OPEN_ALERT_STATES),
+            )
+            .first()
+        )
+        if existing is not None:
+            raise MlflowException(
+                f"Alert rule '{alert_rule_id}' already has an open instance. A rule with "
+                "an undismissed instance cannot open a second one.",
+                error_code=RESOURCE_ALREADY_EXISTS,
+            )
+
+    def create_alert_rule(self, rule):
+        from mlflow.alerts.entities import (
+            derive_evaluation_interval_seconds,
+        )
+
+        _validate_alert_rule_spec(rule)
+
+        interval_seconds = derive_evaluation_interval_seconds(rule.window_seconds)
+        now_ms = get_current_time_millis()
+        sql_rule = SqlAlertRule(
+            alert_rule_id=rule.alert_rule_id or uuid.uuid4().hex,
+            experiment_id=int(rule.experiment_id),
+            name=rule.name,
+            severity=rule.severity,
+            enabled=bool(rule.enabled),
+            metric_key=rule.metric_key,
+            dimension_key=rule.dimension_key,
+            dimension_value=rule.dimension_value,
+            aggregation=rule.aggregation,
+            percentile_value=rule.percentile_value,
+            comparator=rule.comparator,
+            threshold=rule.threshold,
+            window_seconds=rule.window_seconds,
+            # Derived, never asked for: the interval decides whether consecutive
+            # windows overlap, and the sample count decides whether a percentile
+            # rule can fire at all.
+            evaluation_interval_seconds=interval_seconds,
+            sustain_seconds=rule.sustain_seconds,
+            # Stored verbatim, including an explicit zero. Suggesting a floor is the
+            # caller's job -- the handler fills one in when the request omits the
+            # field, and the form seeds its input from the same function -- so what
+            # the user sees is what gets stored.
+            min_sample_count=rule.min_sample_count,
+            # One whole window out, because a rule cannot be answered over a window
+            # that reaches back before the rule existed.
+            #
+            # `coverage_start_ms` is meant to be the guard for this, but it is keyed
+            # per family -- `(source, dimension_key)`, no experiment --
+            # while rows are written per `(experiment, family)`. So when an
+            # experiment gains its *first* rule for a family, coverage says "covered
+            # since this server started" although not one row was ever written for
+            # that experiment's series. An empty COUNT window reads as a true zero
+            # (deliberately: it is what lets absence rules fire at all), so a
+            # "traffic dropped" rule would fire immediately, reporting an outage
+            # over a stretch that simply was not being recorded.
+            #
+            # Waiting one window means every bucket the first evaluation sees was
+            # genuinely observed. Jitter stays on top of the offset: rules created
+            # together (a template, a scripted setup) would otherwise all come due on
+            # the same tick a window from now, moving the stampede rather than
+            # removing it.
+            next_evaluation_at_ms=(
+                now_ms + rule.window_seconds * 1000 + random.randint(0, interval_seconds * 1000)
+            ),
+            channels=json.dumps(rule.channels) if rule.channels else None,
+            created_by=rule.created_by,
+            creation_timestamp=now_ms,
+            last_updated_timestamp=now_ms,
+        )
+
+        with self.ManagedSessionMaker(read_only=False) as session:
+            self._validate_experiment_exists(session, rule.experiment_id)
+            existing = (
+                self
+                ._alert_rule_query(session, include_deleted=False)
+                .filter(
+                    SqlAlertRule.experiment_id == int(rule.experiment_id),
+                    SqlAlertRule.name == rule.name,
+                )
+                .first()
+            )
+            if existing is not None:
+                # Live rules only, matching the partial unique index. Deleted rules
+                # keep their name -- several may share one -- so this both frees the
+                # name for reuse and is what enforces uniqueness at all on MySQL,
+                # which has no partial indexes.
+                raise MlflowException(
+                    f"Alert rule with name '{rule.name}' already exists for experiment "
+                    f"'{rule.experiment_id}'.",
+                    error_code=RESOURCE_ALREADY_EXISTS,
+                )
+            try:
+                # SAVEPOINT so a lost create race drops only this insert and
+                # leaves the session usable for the disambiguating re-query.
+                with session.begin_nested():
+                    session.add(sql_rule)
+                    session.flush()
+            except IntegrityError as e:
+                duplicate = (
+                    session
+                    .query(SqlAlertRule.alert_rule_id)
+                    .filter(
+                        SqlAlertRule.experiment_id == int(rule.experiment_id),
+                        SqlAlertRule.name == rule.name,
+                        # The index is partial, so only a live rule can have
+                        # caused this -- a deleted namesake is not the culprit.
+                        SqlAlertRule.deleted_at_ms.is_(None),
+                    )
+                    .first()
+                )
+                if duplicate is not None:
+                    raise MlflowException(
+                        f"Alert rule with name '{rule.name}' already exists for experiment "
+                        f"'{rule.experiment_id}'.",
+                        error_code=RESOURCE_ALREADY_EXISTS,
+                    ) from e
+                raise
+            return _sql_alert_rule_to_entity(sql_rule)
+
+    def get_alert_rule(self, alert_rule_id):
+        with self.ManagedSessionMaker() as session:
+            return _sql_alert_rule_to_entity(self._get_sql_alert_rule(session, alert_rule_id))
+
+    def list_alert_rules(self, experiment_id):
+        with self.ManagedSessionMaker() as session:
+            self._validate_experiment_exists(session, experiment_id)
+            rows = (
+                self
+                ._alert_rule_query(session)
+                .filter(SqlAlertRule.experiment_id == int(experiment_id))
+                .order_by(SqlAlertRule.creation_timestamp.desc(), SqlAlertRule.alert_rule_id)
+                .all()
+            )
+            return [_sql_alert_rule_to_entity(row) for row in rows]
+
+    def update_alert_rule(self, alert_rule_id, **updates):
+        from mlflow.alerts.entities import (
+            SYSTEM_DISMISS_RULE_DISABLED,
+            SYSTEM_DISMISS_RULE_EDITED,
+            derive_evaluation_interval_seconds,
+            derive_min_sample_count,
+        )
+
+        if unknown := sorted(set(updates) - _ALERT_RULE_UPDATABLE_FIELDS):
+            raise MlflowException(
+                f"Unsupported alert rule field(s) for update: {unknown}. "
+                f"Updatable fields: {sorted(_ALERT_RULE_UPDATABLE_FIELDS)}.",
+                error_code=INVALID_PARAMETER_VALUE,
+            )
+        if not updates:
+            return self.get_alert_rule(alert_rule_id)
+
+        with self.ManagedSessionMaker(read_only=False) as session:
+            sql_rule = self._get_sql_alert_rule(session, alert_rule_id, for_update=True)
+            before = _sql_alert_rule_to_entity(sql_rule)
+
+            # Validate the *merged* rule, so a patch can never produce a triple
+            # the evaluator would reject (e.g. moving `metric_key` to one whose
+            # catalogue entry doesn't allow the existing aggregation).
+            merged = _sql_alert_rule_to_entity(sql_rule)
+            for key, value in updates.items():
+                setattr(merged, key, value)
+            _validate_alert_rule_spec(merged)
+
+            if "name" in updates and merged.name != before.name:
+                # Same live-only scope as create. Without this a rename onto a
+                # taken name surfaces as a raw IntegrityError, i.e. a 500.
+                collision = (
+                    self
+                    ._alert_rule_query(session, include_deleted=False)
+                    .filter(
+                        SqlAlertRule.experiment_id == sql_rule.experiment_id,
+                        SqlAlertRule.name == merged.name,
+                        SqlAlertRule.alert_rule_id != alert_rule_id,
+                    )
+                    .first()
+                )
+                if collision is not None:
+                    raise MlflowException(
+                        f"Alert rule with name '{merged.name}' already exists for experiment "
+                        f"'{sql_rule.experiment_id}'.",
+                        error_code=RESOURCE_ALREADY_EXISTS,
+                    )
+
+            now_ms = get_current_time_millis()
+            for key, value in updates.items():
+                if key == "channels":
+                    sql_rule.channels = json.dumps(value) if value else None
+                elif key == "threshold":
+                    sql_rule.threshold = value
+                elif key == "enabled":
+                    sql_rule.enabled = bool(value)
+                else:
+                    setattr(sql_rule, key, value)
+
+            if "window_seconds" in updates:
+                interval_seconds = derive_evaluation_interval_seconds(merged.window_seconds)
+                sql_rule.evaluation_interval_seconds = interval_seconds
+                # A shorter interval must not leave the rule waiting out the old
+                # (longer) one before its first evaluation under the new window.
+                due_ms = now_ms + interval_seconds * 1000
+                if sql_rule.next_evaluation_at_ms is None:
+                    sql_rule.next_evaluation_at_ms = due_ms
+                else:
+                    sql_rule.next_evaluation_at_ms = min(sql_rule.next_evaluation_at_ms, due_ms)
+            if "min_sample_count" not in updates and (
+                "aggregation" in updates or "percentile_value" in updates
+            ):
+                # Re-derive only when the caller did not say. Moving p95 to p99
+                # should raise a floor the user never chose, but must not overwrite
+                # one they did -- the whole point of surfacing the field.
+                sql_rule.min_sample_count = derive_min_sample_count(
+                    merged.aggregation, merged.percentile_value
+                )
+
+            # Editing a rule is most likely to happen *during* an incident, so
+            # the effect on an already-open instance is part of the contract:
+            #  - threshold / comparator: instance stays open and is re-evaluated
+            #    next cycle. Its own `threshold` column keeps the value it fired
+            #    at, so the notification history stays truthful.
+            #  - what is measured (window, metric, dimension, aggregation): close
+            #    it; it now measures a different thing.
+            #  - disabled: close it and stop scheduling. Re-enabling starts clean.
+            if updates.get("enabled") is False and before.enabled:
+                self._close_open_alert_instances(
+                    session, alert_rule_id, SYSTEM_DISMISS_RULE_DISABLED, now_ms
+                )
+            elif any(
+                key in updates and getattr(before, key) != getattr(merged, key)
+                for key in _ALERT_RULE_MEASUREMENT_FIELDS
+            ):
+                self._close_open_alert_instances(
+                    session, alert_rule_id, SYSTEM_DISMISS_RULE_EDITED, now_ms
+                )
+
+            sql_rule.last_updated_timestamp = now_ms
+            session.flush()
+            return _sql_alert_rule_to_entity(sql_rule)
+
+    def delete_alert_rule(self, alert_rule_id):
+        from mlflow.alerts.entities import SYSTEM_DISMISS_RULE_DELETED
+
+        with self.ManagedSessionMaker(read_only=False) as session:
+            sql_rule = self._get_sql_alert_rule(session, alert_rule_id, for_update=True)
+            now_ms = get_current_time_millis()
+            # Soft delete only. A hard delete (or an ON DELETE CASCADE to
+            # `alert_instances`) would erase the record of everything this rule
+            # ever caught -- exactly the history someone wants during a
+            # postmortem, destroyed by the cleanup action most likely to precede
+            # one. The row stays, and its instances stay readable.
+            sql_rule.deleted_at_ms = now_ms
+            sql_rule.last_updated_timestamp = now_ms
+            # Close any open instance. Deleting a rule is an explicit "stop telling
+            # me about this", so leaving an unacknowledged red row for a rule that
+            # no longer exists is noise the user cannot act on -- and nothing will
+            # ever update it again, since the rule is no longer evaluated. Closing
+            # is not forgetting: the row stays, as DISMISSED with a system actor,
+            # so the history survives.
+            self._close_open_alert_instances(
+                session, alert_rule_id, SYSTEM_DISMISS_RULE_DELETED, now_ms
+            )
+            session.flush()
+
+    def list_alert_instances(self, experiment_id, states=None, max_results=100):
+        if states is not None and (invalid := sorted(set(states) - _ALERT_STATES)):
+            raise MlflowException(
+                f"Invalid alert instance state(s): {invalid}. Valid states: "
+                f"{sorted(_ALERT_STATES)}.",
+                error_code=INVALID_PARAMETER_VALUE,
+            )
+        if max_results is not None and max_results <= 0:
+            raise MlflowException(
+                f"`max_results` must be positive, got {max_results}.",
+                error_code=INVALID_PARAMETER_VALUE,
+            )
+        # Defaults to every undismissed state, which is the active-alerts view;
+        # callers pass explicit states for history. INACTIVE belongs here rather
+        # than in history: it has recovered but nobody has acknowledged it, so it
+        # still needs attention.
+        wanted = list(states) if states else list(_UNDISMISSED_ALERT_STATES)
+        with self.ManagedSessionMaker() as session:
+            self._validate_experiment_exists(session, experiment_id)
+            rows = (
+                session
+                .query(SqlAlertInstance)
+                .filter(
+                    SqlAlertInstance.experiment_id == int(experiment_id),
+                    SqlAlertInstance.state.in_(wanted),
+                )
+                .order_by(
+                    SqlAlertInstance.started_at_ms.desc(),
+                    SqlAlertInstance.alert_instance_id,
+                )
+                .limit(max_results)
+                .all()
+            )
+            return [_sql_alert_instance_to_entity(row) for row in rows]
+
+    def dismiss_alert_instance(self, alert_instance_id, dismissed_by):
+        if not dismissed_by or not str(dismissed_by).strip():
+            raise MlflowException(
+                "`dismissed_by` is required to dismiss an alert instance.",
+                error_code=INVALID_PARAMETER_VALUE,
+            )
+        with self.ManagedSessionMaker(read_only=False) as session:
+            # Scoped through the owning rule (including soft-deleted ones -- an
+            # instance outlives its rule and must stay dismissable).
+            row = (
+                session
+                .query(SqlAlertInstance)
+                .join(
+                    SqlAlertRule,
+                    SqlAlertInstance.alert_rule_id == SqlAlertRule.alert_rule_id,
+                )
+                .filter(
+                    SqlAlertInstance.alert_instance_id == alert_instance_id,
+                    SqlAlertRule.alert_rule_id.in_(
+                        self._alert_rule_query(session, include_deleted=True).with_entities(
+                            SqlAlertRule.alert_rule_id
+                        )
+                    ),
+                )
+                .one_or_none()
+            )
+            if row is None:
+                raise MlflowException(
+                    f"Alert instance with id '{alert_instance_id}' not found.",
+                    error_code=RESOURCE_DOES_NOT_EXIST,
+                )
+            if row.state == "DISMISSED":
+                # Idempotent: the first acknowledgement owns the attribution.
+                return _sql_alert_instance_to_entity(row)
+            row.state = "DISMISSED"
+            row.dismissed_at_ms = get_current_time_millis()
+            row.dismissed_by = dismissed_by
+            session.flush()
+            return _sql_alert_instance_to_entity(row)
+
+    def list_alert_dimension_values(self, experiment_id, metric_key, dimension_key):
+        from mlflow.alerts.aggregator import distinct_dimension_values
+
+        with self.ManagedSessionMaker() as session:
+            self._validate_experiment_exists(session, experiment_id)
+            # Reads the raw tables, not `metric_series`. Sourcing the rule editor
+            # from the table that aggregation writes would make the feature
+            # bootstrap into a state it cannot leave once aggregation becomes
+            # demand-driven -- no subscription, no series, no dropdown, so no way
+            # to create the rule that would subscribe. See the docstring on
+            # `distinct_dimension_values`.
+            try:
+                return distinct_dimension_values(
+                    session,
+                    self.db_type,
+                    experiment_id,
+                    metric_key,
+                    dimension_key,
+                    now_ms=get_current_time_millis(),
+                )
+            except ValueError as e:
+                # A pair with no values is a bad request, not an empty answer --
+                # returning [] would be indistinguishable from "no traffic yet".
+                raise MlflowException(str(e), error_code=INVALID_PARAMETER_VALUE) from e
+
+    # ------------------------------------------------------------------
+    # Alerting: the evaluation side.
+    #
+    # Deliberately absent from `abstract_store` and `rest_store`: these only ever
+    # run in-process on the server, so a remote client has no use for any of them.
+    # They are the `AlertEvaluationStore` protocol in
+    # mlflow/alerts/evaluator.py.
+    #
+    # None of them is workspace-scoped. The evaluator runs outside any workspace
+    # context and must evaluate every tenant's rules; scoping the due-rule scan
+    # would silently stop evaluating rules for every workspace but the active
+    # one. The user-facing methods above are scoped as usual.
+    # ------------------------------------------------------------------
+
+    def due_alert_rules(self, now_ms: int, limit: int = 50) -> list:
+        from mlflow.alerts.evaluator import due_rule_ids
+
+        with self.ManagedSessionMaker(read_only=True) as session:
+            # The query lives with the evaluator, which is where it is tested.
+            rule_ids = due_rule_ids(session, now_ms, limit=limit)
+            if not rule_ids:
+                return []
+            rows = {
+                row.alert_rule_id: row
+                for row in session
+                .query(SqlAlertRule)
+                .filter(SqlAlertRule.alert_rule_id.in_(rule_ids))
+                .all()
+            }
+            # Preserve the most-overdue-first order the query established; it is
+            # what keeps a badly overdue rule from starving under the batch limit.
+            return [_sql_alert_rule_to_entity(rows[rid]) for rid in rule_ids if rid in rows]
+
+    def get_open_alert_instance(self, alert_rule_id: str):
+        # Deliberately the write session. Read-only sessions route to the read
+        # replica when one is configured, and this read decides whether to open a
+        # new instance -- so under replica lag the evaluator does not see the
+        # instance it opened moments ago and opens a second. That violates the
+        # partial unique index (and on MySQL, which has none, pages twice).
+        with self.ManagedSessionMaker(read_only=False) as session:
+            row = (
+                session
+                .query(SqlAlertInstance)
+                .filter(
+                    SqlAlertInstance.alert_rule_id == alert_rule_id,
+                    SqlAlertInstance.state.in_(_OPEN_ALERT_STATES),
+                )
+                .order_by(SqlAlertInstance.started_at_ms.desc())
+                .first()
+            )
+            return _sql_alert_instance_to_entity(row) if row is not None else None
+
+    def save_alert_instance(self, instance):
+        """Insert or update one firing episode.
+
+        An open instance suppresses re-notification: a later breach updates
+        ``observed_value`` and ``peak_value`` on the existing row rather than
+        opening a second one, which is why this is an upsert and not an insert.
+        """
+        with self.ManagedSessionMaker(read_only=False) as session:
+            row = (
+                session
+                .query(SqlAlertInstance)
+                .filter(SqlAlertInstance.alert_instance_id == instance.alert_instance_id)
+                .one_or_none()
+            )
+            if row is None:
+                if instance.state in _OPEN_ALERT_STATES:
+                    self._assert_no_open_alert_instance(session, instance.alert_rule_id)
+                row = SqlAlertInstance(
+                    alert_instance_id=instance.alert_instance_id,
+                    alert_rule_id=instance.alert_rule_id,
+                    experiment_id=int(instance.experiment_id),
+                    started_at_ms=instance.started_at_ms,
+                )
+                session.add(row)
+            row.state = instance.state
+            row.fired_at_ms = instance.fired_at_ms
+            row.dismissed_at_ms = instance.dismissed_at_ms
+            row.dismissed_by = instance.dismissed_by
+            row.healthy_since_ms = instance.healthy_since_ms
+            row.observed_value = instance.observed_value
+            row.peak_value = instance.peak_value
+            row.threshold = instance.threshold
+            row.sample_count = instance.sample_count
+            row.window_start_ms = instance.window_start_ms
+            row.window_end_ms = instance.window_end_ms
+            row.exemplar_trace_ids = (
+                json.dumps(instance.exemplar_trace_ids) if instance.exemplar_trace_ids else None
+            )
+            session.flush()
+            return _sql_alert_instance_to_entity(row)
+
+    def record_alert_rule_evaluated(
+        self,
+        alert_rule_id: str,
+        last_evaluated_ms: int,
+        next_evaluation_at_ms: int,
+        last_sample_count: int | None,
+    ) -> None:
+        with self.ManagedSessionMaker(read_only=False) as session:
+            session.query(SqlAlertRule).filter(SqlAlertRule.alert_rule_id == alert_rule_id).update(
+                {
+                    SqlAlertRule.last_evaluated_ms: last_evaluated_ms,
+                    SqlAlertRule.next_evaluation_at_ms: next_evaluation_at_ms,
+                    SqlAlertRule.last_sample_count: last_sample_count,
+                },
+                synchronize_session=False,
+            )
+
+
+class SqlAlchemyRawValueVerifier:
+    """Exact raw-row counts, for the rare case where histogram bounds straddle.
+
+    Snapping thresholds to a boundary at rule-creation time makes this uncommon,
+    but without it an ambiguous rule silently falls back to the bucketed estimate
+    and the evaluator marks the decision inexact. Implements the
+    ``RawValueVerifier`` protocol in mlflow/alerts/evaluator.py.
+
+    Only latency is supported: it is the only metric whose raw observations are a
+    single indexed column (trace duration, span duration). Cost, tokens and
+    assessment values live in EAV tables whose exact percentile would need a
+    different query per metric; those fall back to the bucketed estimate, which
+    over-estimates by less than one bucket width.
+    """
+
+    def __init__(self, store: "SqlAlchemyStore"):
+        self._store = store
+
+    def count_above(self, series, start_ms: int, end_ms: int, threshold: float) -> int:
+        if series.metric_key != "latency":
+            raise ValueError(
+                f"Raw verification is only implemented for latency, got '{series.metric_key}'"
+            )
+        with self._store.ManagedSessionMaker() as session:
+            if series.dimension_key == "TRACES":
+                query = (
+                    session
+                    .query(func.count())
+                    .select_from(SqlTraceInfo)
+                    .filter(
+                        SqlTraceInfo.experiment_id == int(series.experiment_id),
+                        # Half-open [start, end), matching the buckets exactly, and
+                        # keyed on completion time like the rollup.
+                        SqlTraceInfo.end_time_ms >= start_ms,
+                        SqlTraceInfo.end_time_ms < end_ms,
+                        SqlTraceInfo.execution_time_ms > threshold,
+                    )
+                )
+                if series.dimension_value:
+                    query = query.filter(SqlTraceInfo.status == series.dimension_value)
+                return int(query.scalar() or 0)
+
+            if series.dimension_key in ("SPAN_TYPE", "SPAN_NAME"):
+                # Span times are nanoseconds; the window and the threshold are
+                # milliseconds. Scaling the bounds rather than the column keeps the
+                # comparison sargable against index_spans_end_time_unix_nano.
+                query = (
+                    session
+                    .query(func.count())
+                    .select_from(SqlSpan)
+                    .filter(
+                        SqlSpan.experiment_id == int(series.experiment_id),
+                        SqlSpan.end_time_unix_nano >= start_ms * 1_000_000,
+                        SqlSpan.end_time_unix_nano < end_ms * 1_000_000,
+                        SqlSpan.duration_ns > threshold * 1_000_000,
+                    )
+                )
+                if series.dimension_value:
+                    column = SqlSpan.type if series.dimension_key == "SPAN_TYPE" else SqlSpan.name
+                    query = query.filter(column == series.dimension_value)
+                return int(query.scalar() or 0)
+
+            raise ValueError(
+                f"Raw verification is not implemented for dimension '{series.dimension_key}'"
+            )
+
+
+_ALERT_STATES = frozenset({"PENDING", "FIRED", "INACTIVE", "DISMISSED"})
+
+_OPEN_ALERT_STATES = ("PENDING", "FIRED")
+""""Open" in the sense the partial unique index means it: at most one instance per
+``alert_rule_id`` may be in one of these, so this is exactly the set that decides
+whether a rule may open a *second* instance.
+
+INACTIVE is deliberately absent. A recovered-but-unacknowledged episode is still
+on screen but must not block the next one from opening -- otherwise a rule that
+breached, recovered and breached again would show one row and the second incident
+would never be reported. Mirrors ``OPEN_STATES`` in ``state_machine``.
+"""
+
+_UNDISMISSED_ALERT_STATES = ("PENDING", "FIRED", "INACTIVE")
+""""Still wants a human" -- the default active-alerts view, and what a rule edit,
+disable or delete closes. Mirrors ``ACTIVE_STATES`` in ``state_machine``."""
+
+_ALERT_RULE_UPDATABLE_FIELDS = frozenset({
+    "name",
+    "severity",
+    "enabled",
+    "metric_key",
+    "dimension_key",
+    "dimension_value",
+    "aggregation",
+    "percentile_value",
+    "comparator",
+    "threshold",
+    "window_seconds",
+    "sustain_seconds",
+    "min_sample_count",
+    "channels",
+})
+
+_ALERT_RULE_MEASUREMENT_FIELDS = (
+    "window_seconds",
+    "metric_key",
+    "dimension_key",
+    "dimension_value",
+    "aggregation",
+    "percentile_value",
+)
+"""Fields whose change makes an open instance measure a different thing.
+
+`threshold` and `comparator` are deliberately absent: tuning a noisy threshold
+mid-incident must not close the instance the user is looking at.
+"""
+
+
+def _completion_time_ms(timestamp_ms: int | None, execution_time_ms: int | None) -> int | None:
+    """``trace_info.end_time_ms``: null while the trace is still in progress.
+
+    Materialized rather than generated because SQLite cannot ``ALTER TABLE ADD`` a
+    stored generated column, and the rollup needs this column indexed.
+    """
+    if timestamp_ms is None or execution_time_ms is None:
+        return None
+    return timestamp_ms + execution_time_ms
+
+
+def _sql_trace_completion_time_ms(sql_trace_info, batch_end_ms: int | None = None) -> int | None:
+    """Best-known completion time for a trace row being updated.
+
+    ``batch_end_ms`` is the last span end in the batch currently being written; the
+    stored row may already be later (spans arrive out of order across calls), so the
+    later of the two wins -- the same rule the duration update applies in SQL.
+    """
+    stored = sql_trace_info.end_time_ms
+    if stored is None:
+        stored = _completion_time_ms(sql_trace_info.timestamp_ms, sql_trace_info.execution_time_ms)
+    candidates = [value for value in (stored, batch_end_ms) if value is not None]
+    return max(candidates) if candidates else None
+
+
+# Thresholds used to be snapped onto the nearest histogram boundary here, on the
+# reasoning that a threshold is a rough human guess and snapping made the exact
+# bounds in `histogram.count_above` collapse. It did -- but it also silently
+# rewrote the user's number: a rule asking for p95 > 43 minutes was stored, and
+# alerted, at 45.
+#
+# Refining the ladder around each subscribed threshold achieves the same collapse
+# without changing anything the user typed, so the threshold is now stored exactly
+# as given. See `histogram.build_boundaries`.
+
+
+def _validate_alert_rule_spec(rule) -> None:
+    """Validate a rule against METRIC_CATALOGUE and the window bounds.
+
+    One source of truth for the form and the evaluator: the UI dropdowns are
+    driven by the same catalogue, so a form cannot submit a triple that the
+    evaluator would reject.
+    """
+    from mlflow.alerts.entities import (
+        MAX_WINDOW_SECONDS,
+        MIN_WINDOW_SECONDS,
+        validate_dimension_value,
+        validate_metric_triple,
+    )
+
+    if not rule.name or not rule.name.strip():
+        raise MlflowException("Alert rule `name` is required.", error_code=INVALID_PARAMETER_VALUE)
+    try:
+        # Single source of truth, shared with the UI's dropdowns: the form cannot
+        # offer a triple this rejects, and the wording stays identical on both
+        # sides. Translated to MlflowException here so the REST layer answers 400
+        # rather than 500.
+        validate_metric_triple(rule.metric_key, rule.dimension_key, rule.aggregation)
+        # The value, unlike the triple, is free text -- so this is the only thing
+        # standing between a typo and a rule that is accepted and never fires.
+        validate_dimension_value(rule.metric_key, rule.dimension_key, rule.dimension_value)
+    except ValueError as e:
+        raise MlflowException(str(e), error_code=INVALID_PARAMETER_VALUE) from e
+    if rule.comparator not in _ALERT_COMPARATORS:
+        raise MlflowException(
+            f"Invalid comparator '{rule.comparator}'. Supported: {sorted(_ALERT_COMPARATORS)}.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    if rule.severity not in _ALERT_SEVERITIES:
+        raise MlflowException(
+            f"Invalid severity '{rule.severity}'. Supported: {sorted(_ALERT_SEVERITIES)}.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    if rule.threshold is None or isinstance(rule.threshold, bool):
+        raise MlflowException(
+            "Alert rule `threshold` must be a number.", error_code=INVALID_PARAMETER_VALUE
+        )
+    if not isinstance(rule.window_seconds, int) or isinstance(rule.window_seconds, bool):
+        raise MlflowException(
+            "Alert rule `window_seconds` must be an integer.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    # Window bounds are correctness, not preference: consecutive evaluations
+    # overlap by `window - interval`, and below the floor the derived interval
+    # clamps and that overlap collapses, leaving gaps nothing ever inspects.
+    if not MIN_WINDOW_SECONDS <= rule.window_seconds <= MAX_WINDOW_SECONDS:
+        raise MlflowException(
+            f"`window_seconds` must be between {MIN_WINDOW_SECONDS} and "
+            f"{MAX_WINDOW_SECONDS}, got {rule.window_seconds}.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    if rule.sustain_seconds is None or rule.sustain_seconds < 0:
+        raise MlflowException(
+            f"`sustain_seconds` must not be negative, got {rule.sustain_seconds}.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    if rule.min_sample_count is None or rule.min_sample_count < 0:
+        raise MlflowException(
+            f"`min_sample_count` must not be negative, got {rule.min_sample_count}.",
+            error_code=INVALID_PARAMETER_VALUE,
+        )
+    if rule.aggregation == "PERCENTILE":
+        if rule.percentile_value is None or not 0 < rule.percentile_value < 100:
+            raise MlflowException(
+                "`percentile_value` must be strictly between 0 and 100 for a PERCENTILE "
+                f"rule, got {rule.percentile_value}.",
+                error_code=INVALID_PARAMETER_VALUE,
+            )
+
+
+_ALERT_COMPARATORS = frozenset({"GT", "GTE", "LT", "LTE"})
+_ALERT_SEVERITIES = frozenset({"LOW", "MEDIUM", "HIGH"})
+
+
+def _sql_alert_rule_to_entity(sql_rule):
+    from mlflow.alerts.entities import AlertRule
+
+    return AlertRule(
+        alert_rule_id=sql_rule.alert_rule_id,
+        experiment_id=sql_rule.experiment_id,
+        name=sql_rule.name,
+        metric_key=sql_rule.metric_key,
+        dimension_key=sql_rule.dimension_key,
+        aggregation=sql_rule.aggregation,
+        comparator=sql_rule.comparator,
+        threshold=sql_rule.threshold,
+        window_seconds=sql_rule.window_seconds,
+        evaluation_interval_seconds=sql_rule.evaluation_interval_seconds,
+        dimension_value=sql_rule.dimension_value,
+        percentile_value=sql_rule.percentile_value,
+        sustain_seconds=sql_rule.sustain_seconds,
+        min_sample_count=sql_rule.min_sample_count,
+        severity=sql_rule.severity,
+        enabled=bool(sql_rule.enabled),
+        last_evaluated_ms=sql_rule.last_evaluated_ms,
+        next_evaluation_at_ms=sql_rule.next_evaluation_at_ms,
+        last_sample_count=sql_rule.last_sample_count,
+        deleted_at_ms=sql_rule.deleted_at_ms,
+        channels=json.loads(sql_rule.channels) if sql_rule.channels else [],
+        created_by=sql_rule.created_by,
+        creation_timestamp=sql_rule.creation_timestamp,
+        last_updated_timestamp=sql_rule.last_updated_timestamp,
+    )
+
+
+def _sql_alert_instance_to_entity(sql_instance):
+    from mlflow.alerts.entities import AlertInstance
+
+    return AlertInstance(
+        alert_instance_id=sql_instance.alert_instance_id,
+        alert_rule_id=sql_instance.alert_rule_id,
+        experiment_id=sql_instance.experiment_id,
+        state=sql_instance.state,
+        started_at_ms=sql_instance.started_at_ms,
+        window_start_ms=sql_instance.window_start_ms,
+        window_end_ms=sql_instance.window_end_ms,
+        observed_value=sql_instance.observed_value,
+        peak_value=sql_instance.peak_value,
+        threshold=sql_instance.threshold,
+        sample_count=sql_instance.sample_count or 0,
+        fired_at_ms=sql_instance.fired_at_ms,
+        dismissed_at_ms=sql_instance.dismissed_at_ms,
+        dismissed_by=sql_instance.dismissed_by,
+        healthy_since_ms=sql_instance.healthy_since_ms,
+        exemplar_trace_ids=(
+            json.loads(sql_instance.exemplar_trace_ids) if sql_instance.exemplar_trace_ids else []
+        ),
+    )
 
 
 def _get_sqlalchemy_filter_clauses(parsed, session, dialect):

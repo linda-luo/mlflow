@@ -19,6 +19,8 @@ from mlflow.protos.databricks_pb2 import (
     RESOURCE_DOES_NOT_EXIST,
 )
 from mlflow.store.tracking.dbmodels.models import (
+    SqlAlertInstance,
+    SqlAlertRule,
     SqlAssessments,
     SqlEvaluationDataset,
     SqlExperiment,
@@ -39,6 +41,7 @@ from mlflow.store.tracking.dbmodels.models import (
     SqlMCPServerTag,
     SqlMCPServerVersion,
     SqlMCPServerVersionTag,
+    SqlMetricSeries,
     SqlOnlineScoringConfig,
     SqlReviewQueue,
     SqlReviewQueueItem,
@@ -90,6 +93,14 @@ class WorkspaceAwareSqlAlchemyStore(WorkspaceAwareMixin, SqlAlchemyStore):
         if model is SqlTraceInfo:
             return query.join(
                 SqlExperiment, SqlTraceInfo.experiment_id == SqlExperiment.experiment_id
+            ).filter(SqlExperiment.workspace == workspace)
+
+        if model in (SqlAlertRule, SqlAlertInstance, SqlMetricSeries):
+            # All three carry a denormalized `experiment_id`; scope through
+            # `experiments` so a rule, its firing history and the dimension
+            # values offered in the rule editor all stay inside the workspace.
+            return query.join(
+                SqlExperiment, model.experiment_id == SqlExperiment.experiment_id
             ).filter(SqlExperiment.workspace == workspace)
 
         if model is SqlIssue:

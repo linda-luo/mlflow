@@ -159,6 +159,10 @@
     "defaultMessage": "Max",
     "description": "Column title for the column displaying the maximum metric values for a metric"
   },
+  "+iyIhX": {
+    "defaultMessage": "Measured over the last",
+    "description": "Create alert rule: window field label"
+  },
   "+jTk/P": {
     "defaultMessage": "Show less",
     "description": "MCP server package show less env vars button"
@@ -415,6 +419,10 @@
     "defaultMessage": "View docs",
     "description": "Text for docs link button on experiment view page header"
   },
+  "/mE7LI": {
+    "defaultMessage": "Rules",
+    "description": "Alerts page: rules section title"
+  },
   "/mbCKq": {
     "defaultMessage": "Add your {provider} API key to continue, or pick another provider below.",
     "description": "Explanation shown in the inline assistant API key prompt"
@@ -438,6 +446,10 @@
   "/tENRM": {
     "defaultMessage": "Metadata",
     "description": "Section title for metadata in the V2 dataset record side panel"
+  },
+  "/uQwzL": {
+    "defaultMessage": "Deleted rule",
+    "description": "Alerts page: label for an instance whose rule has been soft-deleted"
   },
   "/v6KuF": {
     "defaultMessage": "Automatically log traces for LlamaIndex queries by calling the {code} function. For example:",
@@ -495,6 +507,10 @@
     "defaultMessage": "Close guidance",
     "description": "Aria label for closing the detect issues guidance popover"
   },
+  "058hh1": {
+    "defaultMessage": "Any exception type",
+    "description": "Alert rule editor: unscoped option for exception type"
+  },
   "075RKh": {
     "defaultMessage": "Loaded {name} v{version} with settings",
     "description": "Success toast shown on the playground after loading a prompt version that also applied stored settings"
@@ -506,6 +522,10 @@
   "08WP3h": {
     "defaultMessage": "Staging",
     "description": "Column title for staging phase version in the registered model page"
+  },
+  "0AvjdH": {
+    "defaultMessage": "Add channel",
+    "description": "Create alert rule: add a notification channel"
   },
   "0BIVHk": {
     "defaultMessage": "Response follows instructions, constraints, policies, and formatting",
@@ -623,6 +643,10 @@
     "defaultMessage": "Trace archival retention unit",
     "description": "Label for trace archival retention unit selector"
   },
+  "0o08s4": {
+    "defaultMessage": "spans of type \"{value}\"",
+    "description": "Alert rule scope: narrowed to one span type"
+  },
   "0pY/4R": {
     "defaultMessage": "Usage",
     "description": "Tab label for endpoint usage metrics"
@@ -691,6 +715,10 @@
     "defaultMessage": "Issues",
     "description": "Run details page > tab selector > issues tab"
   },
+  "13rFAn": {
+    "defaultMessage": "Disabled",
+    "description": "Alerts table: rule is not being evaluated"
+  },
   "13vJft": {
     "defaultMessage": "View Examples",
     "description": "Experiment page > new run modal > prompt examples button"
@@ -726,6 +754,10 @@
   "1CPknH": {
     "defaultMessage": "When the trace was created",
     "description": "Tooltip description for the Request Time column in the traces table"
+  },
+  "1D0l1a": {
+    "defaultMessage": "New alert",
+    "description": "Create alert rule modal title"
   },
   "1FCO3Y": {
     "defaultMessage": "Questions are locked once the queue has traces attached.",
@@ -859,6 +891,10 @@
     "defaultMessage": "View details",
     "description": "Link to the issue detection run overview from the completion notification"
   },
+  "1sI3hH": {
+    "defaultMessage": "Suggested for p{percentile}: {suggested}",
+    "description": "Create alert rule: the statistical suggestion, once the user has overridden it"
+  },
   "1tVKvm": {
     "defaultMessage": "Change message role",
     "description": "Aria label for the dropdown that swaps a chat message role on the playground page"
@@ -907,6 +943,10 @@
     "defaultMessage": "LLM judge",
     "description": "Section header for LLM judge selection"
   },
+  "26jpZd": {
+    "defaultMessage": "The sustain period must be a number of minutes, and cannot be negative. Leave it empty to alert on the first breaching evaluation.",
+    "description": "Create alert rule: sustain period invalid error"
+  },
   "26uApn": {
     "defaultMessage": "Trace archival retention updated",
     "description": "Partial save status message when experiment trace archival retention update succeeds"
@@ -934,6 +974,10 @@
   "2DNVN4": {
     "defaultMessage": "Aliases allow you to assign a mutable, named reference to a particular model version. <link>Learn more</link>",
     "description": "Explanation of registered model aliases"
+  },
+  "2Golan": {
+    "defaultMessage": "Opened",
+    "description": "Alert detail: when the episode opened"
   },
   "2Hf+yU": {
     "defaultMessage": "Time (wall)",
@@ -1135,6 +1179,10 @@
     "defaultMessage": "Git commit",
     "description": "Usage overview > metrics filter > git commit column option label"
   },
+  "2ydn5t": {
+    "defaultMessage": "Confirming",
+    "description": "Alerts table: rule is breaching but has not sustained yet"
+  },
   "2zy+D5": {
     "defaultMessage": "Add new tag",
     "description": "Experiment tracking > experiment page > runs > add new tag button"
@@ -1158,6 +1206,10 @@
   "37ReeZ": {
     "defaultMessage": "On",
     "description": "Usage tracking enabled state"
+  },
+  "3AtZNy": {
+    "defaultMessage": "Recent activity",
+    "description": "Alerts page: recent activity section title"
   },
   "3CWJEU": {
     "defaultMessage": "Issues",
@@ -1186,6 +1238,10 @@
   "3MZ6H+": {
     "defaultMessage": "Submit",
     "description": "Label for the submit button on the playground page that runs the chat completion request"
+  },
+  "3MtOsm": {
+    "defaultMessage": "Create",
+    "description": "Create alert rule: confirm button"
   },
   "3N1zOb": {
     "defaultMessage": "Disabled",
@@ -1227,6 +1283,10 @@
     "defaultMessage": "Traffic split percentages must total 100%",
     "description": "Tooltip shown when save button is disabled due to invalid traffic split total"
   },
+  "3Z16JS": {
+    "defaultMessage": "Disable",
+    "description": "Alert rules table: button that stops a rule being evaluated"
+  },
   "3bagxW": {
     "defaultMessage": "<link>Learn more</link>",
     "description": "Learn more tooltip link to learn more on how to search models"
@@ -1250,6 +1310,10 @@
   "3hpe6y": {
     "defaultMessage": "Watch a short clip of what tracing looks like",
     "description": "Sublabel on the click-to-play video preview in the traces empty state"
+  },
+  "3l2oPq": {
+    "defaultMessage": "Enable",
+    "description": "Alert rules table: button that resumes evaluating a rule"
   },
   "3n8Eue": {
     "defaultMessage": "Enter a model name not listed above. Capabilities may not be detected.",
@@ -1579,9 +1643,17 @@
     "defaultMessage": "Validate the model before deployment",
     "description": "Heading text for validating the model before deploying it for serving"
   },
+  "5E2/ij": {
+    "defaultMessage": "Judge score",
+    "description": "Alert rule editor: metric option for judge output"
+  },
   "5EY1X7": {
     "defaultMessage": "Small trace samples and weaker models can miss real issues. Ways to improve coverage:",
     "description": "Introduction of the guidance callout on low-result issue detection runs"
+  },
+  "5Ew2Pu": {
+    "defaultMessage": "Example traces",
+    "description": "Alert detail: heading for the traces that caused the alert"
   },
   "5GCYzy": {
     "defaultMessage": "Experiment Runs - Databricks",
@@ -1618,6 +1690,10 @@
   "5PlfiT": {
     "defaultMessage": "This request exceeds the maximum queries per second limit. Please wait and try again.",
     "description": "Too many requests (HTTP STATUS 429) generic error message"
+  },
+  "5R7ZG0": {
+    "defaultMessage": "Alerts",
+    "description": "Label for the alerts tab in the MLflow experiment navbar"
   },
   "5RWIet": {
     "defaultMessage": "Schema {sectionName}",
@@ -1703,6 +1779,10 @@
     "defaultMessage": "Delete",
     "description": "Delete button text"
   },
+  "5sLDxq": {
+    "defaultMessage": "{amount, plural, one {# minute} other {# minutes}}",
+    "description": "A window length in minutes"
+  },
   "5sy3VL": {
     "defaultMessage": "e.g. 40",
     "description": "Placeholder for the top-k input on the playground parameters panel"
@@ -1735,6 +1815,10 @@
     "defaultMessage": "Cost",
     "description": "Label for the cost section"
   },
+  "62Vxjf": {
+    "defaultMessage": "Input cost",
+    "description": "Alert rule editor: metric option for prompt spend"
+  },
   "62kUmq": {
     "defaultMessage": "Edit workspace",
     "description": "Aria label for edit workspace button in workspaces table"
@@ -1766,6 +1850,14 @@
   "6BqLF2": {
     "defaultMessage": "Search for a field",
     "description": "Placeholder for search input in schema table"
+  },
+  "6GADcu": {
+    "defaultMessage": "Below minimum",
+    "description": "Alerts table: rule saw fewer samples than its own configured minimum, so it cannot fire"
+  },
+  "6HLwuX": {
+    "defaultMessage": "e.g. Slow checkout responses",
+    "description": "Create alert rule: name field placeholder"
   },
   "6HjFD0": {
     "defaultMessage": "Key name",
@@ -1882,6 +1974,10 @@
   "6kSKRk": {
     "defaultMessage": "Comparing {numVersions} Versions",
     "description": "Text for main title for the model comparison page"
+  },
+  "6mBVM9": {
+    "defaultMessage": "Dismiss",
+    "description": "Alert detail: acknowledge the alert"
   },
   "6nzd2s": {
     "defaultMessage": "Test",
@@ -2083,6 +2179,10 @@
     "defaultMessage": "Identical:",
     "description": "MCP compare identical sections heading"
   },
+  "7ZRbwV": {
+    "defaultMessage": "Any tool",
+    "description": "Alert rule editor: unscoped option for span name"
+  },
   "7ZcrHA": {
     "defaultMessage": "Source",
     "description": "Metadata label for the dataset record source (origin: trace, document, or human)"
@@ -2207,6 +2307,10 @@
     "defaultMessage": "Request",
     "description": "Review queue table: request column"
   },
+  "80xAdc": {
+    "defaultMessage": "Delete",
+    "description": "Alert rules table: delete button"
+  },
   "81+fJx": {
     "defaultMessage": "Couldn't load model information due to an error.",
     "description": "Error state text when the model artifact was unable to load"
@@ -2214,6 +2318,10 @@
   "81DxPY": {
     "defaultMessage": "Contour plots can only be rendered when comparing a group of runs with three or more unique metrics or params. Log more metrics or params to your runs to visualize them using the contour plot.",
     "description": "Text explanation when contour plot is disabled in comparison pages\n              in MLflow"
+  },
+  "81M93x": {
+    "defaultMessage": "Tool or span name",
+    "description": "Alert rule editor: value field label for span name"
   },
   "81PFb9": {
     "defaultMessage": "Prompt type:",
@@ -2263,6 +2371,10 @@
     "defaultMessage": "The provided value is not valid JSON",
     "description": "Error message for invalid JSON in an assessment edit form"
   },
+  "8LKlh/": {
+    "defaultMessage": "Percentile of",
+    "description": "Alert rule editor: PERCENTILE aggregation option"
+  },
   "8Mwwrq": {
     "defaultMessage": "No matching users",
     "description": "Review queue: no users match the owner search"
@@ -2270,6 +2382,10 @@
   "8Oqhz5": {
     "defaultMessage": "Copy failed — clipboard unavailable.",
     "description": "Error toast shown when copying a saved experiment view share link fails"
+  },
+  "8QjRFo": {
+    "defaultMessage": "New alert",
+    "description": "Alerts page: empty state button to create an alert"
   },
   "8Rlf8s": {
     "defaultMessage": "— The model decides whether to call one or more tools (default).",
@@ -2315,6 +2431,10 @@
     "defaultMessage": "Created by:",
     "description": "MCP compare metadata created by label"
   },
+  "8dmyeu": {
+    "defaultMessage": "Edit",
+    "description": "Alert rules table: edit button"
+  },
   "8eVxXM": {
     "defaultMessage": "Cancel",
     "description": "Cancel delete webhook button"
@@ -2338,6 +2458,10 @@
   "8ikgws": {
     "defaultMessage": "Turn {turnNumber}",
     "description": "Label for a single turn within an experiment chat session"
+  },
+  "8kD/oh": {
+    "defaultMessage": "{amount, plural, one {# day} other {# days}}",
+    "description": "A window length in days"
   },
   "8kU9Sc": {
     "defaultMessage": "No API keys found",
@@ -2571,6 +2695,10 @@
     "defaultMessage": "Select parameter or metric",
     "description": "Placeholder text for parameter/metric selector in box plot comparison in MLflow"
   },
+  "9dmVUZ": {
+    "defaultMessage": "No data yet",
+    "description": "Alerts table: rule has never been evaluated"
+  },
   "9eJuAr": {
     "defaultMessage": "{filtered, number} of {total, plural, one {# record} other {# records}}",
     "description": "Record count shown in the V2 dataset records toolbar when a search filter is active. {filtered} is the count matching the search; {total} is the dataset's full record count."
@@ -2627,6 +2755,10 @@
     "defaultMessage": "Create",
     "description": "Label for the create experiment action on the experiments list page"
   },
+  "9vKinG": {
+    "defaultMessage": "Status",
+    "description": "Alert rules table: status column"
+  },
   "9vN4bY": {
     "defaultMessage": "Variables{count, plural, =0 {} other { ({count})}}",
     "description": "Label for the playground top-bar button that opens variable values; suffix shows the count when > 0"
@@ -2654,6 +2786,10 @@
   "9wZidY": {
     "defaultMessage": "Choose from a selection of built-in LLM judges or create your own custom code based judge. {learnMore}",
     "description": "Description for the empty state when no judges exist"
+  },
+  "9xAe2Z": {
+    "defaultMessage": "Number of requests",
+    "description": "Alert rule summary: a COUNT rule over traces"
   },
   "9xfwTO": {
     "defaultMessage": "Loading servers...",
@@ -2690,6 +2826,10 @@
   "A1ljDC": {
     "defaultMessage": "Docs",
     "description": "Sidebar link for docs page"
+  },
+  "A3VGNk": {
+    "defaultMessage": "{value} min",
+    "description": "Alert rule summary: a latency threshold in minutes"
   },
   "A3bM/D": {
     "defaultMessage": "Assistant",
@@ -2771,6 +2911,10 @@
     "defaultMessage": "e.g. get_weather",
     "description": "Placeholder for the tool function name input in the playground Tools card"
   },
+  "ALdX5J": {
+    "defaultMessage": "channel type, e.g. slack",
+    "description": "Create alert rule: channel type placeholder"
+  },
   "AM8DuO": {
     "defaultMessage": "Failed",
     "description": "Run page > Overview > Run status cell > Value for failed state"
@@ -2799,6 +2943,10 @@
     "defaultMessage": "Model",
     "description": "Dimension toggle option for model"
   },
+  "ATbjye": {
+    "defaultMessage": "Rounded up to the {interval}s evaluation interval, which is derived from the window.",
+    "description": "Create alert rule: sustain field hint naming the derived interval"
+  },
   "AVeqtn": {
     "defaultMessage": "Enter default artifact root URI",
     "description": "Placeholder for workspace artifact root input"
@@ -2810,6 +2958,10 @@
   "AX7L9r": {
     "defaultMessage": "Error",
     "description": "Error assessment status in the evaluations table."
+  },
+  "AXtRs1": {
+    "defaultMessage": "Started",
+    "description": "Active alerts table: start time column"
   },
   "AanBxl": {
     "defaultMessage": "my-endpoint",
@@ -2858,6 +3010,10 @@
   "AmLGSf": {
     "defaultMessage": "Apply filters",
     "description": "Usage overview > apply filters button"
+  },
+  "AnRppa": {
+    "defaultMessage": "target — webhook URL, address, room…",
+    "description": "Create alert rule: channel target placeholder"
   },
   "AqmDon": {
     "defaultMessage": "No custom LLM-as-a-judge scorers found",
@@ -2935,6 +3091,10 @@
     "defaultMessage": "This saved view could not be shared.",
     "description": "Error toast shown when building a saved traces view share link fails"
   },
+  "B7idTZ": {
+    "defaultMessage": "Condition",
+    "description": "Alert rules table: condition column"
+  },
   "B80MC6": {
     "defaultMessage": "Contour Plot",
     "description": "Tab pane title for contour plots on the compare runs page"
@@ -3007,6 +3167,10 @@
     "defaultMessage": "Select metric",
     "description": "Placeholder text for a metric selector when configuring a line chart"
   },
+  "BP5X0R": {
+    "defaultMessage": "Nothing observed yet — type a name to alert on something that has not appeared in traffic.",
+    "description": "Create alert rule: hint when no dimension values have been observed"
+  },
   "BPz0N5": {
     "defaultMessage": "Done",
     "description": "Confirm-button text for the V2 evaluation dataset metadata modal"
@@ -3022,6 +3186,10 @@
   "BTAzqb": {
     "defaultMessage": "Toggle visibility of rows",
     "description": "Accessibility label for the button that toggles visibility of rows in the experiment view logged models compare mode"
+  },
+  "BTRQzU": {
+    "defaultMessage": "(threshold {threshold})",
+    "description": "Alert detail: the threshold this value breached"
   },
   "BU8Jni": {
     "defaultMessage": "Response",
@@ -3103,6 +3271,10 @@
     "defaultMessage": "Official endpoints",
     "description": "MCP server official endpoints subsection heading"
   },
+  "Bj+XG1": {
+    "defaultMessage": "Total {metric}",
+    "description": "Alert rule summary: a SUM rule"
+  },
   "BkDhmT": {
     "defaultMessage": "Chat",
     "description": "Label for the chat tab of the model trace explorer."
@@ -3175,6 +3347,10 @@
     "defaultMessage": "Assertions",
     "description": "Assertions column header"
   },
+  "C3XJwk": {
+    "defaultMessage": "Exact name, e.g. search_docs",
+    "description": "Create alert rule: free-text dimension value placeholder"
+  },
   "C4y1fv": {
     "defaultMessage": "-∞",
     "description": "Label displaying negative infinity symbol displayed on a plot UI element"
@@ -3231,6 +3407,10 @@
     "defaultMessage": "System Metrics",
     "description": "Experiment tracking > runs charts > cards > RunsChartsDifferenceChartCard > system metrics heading"
   },
+  "CFng77": {
+    "defaultMessage": "USD",
+    "description": "Alert rule editor: unit of a spend threshold"
+  },
   "CIIUsc": {
     "defaultMessage": "SHA-256",
     "description": "Package file hash label"
@@ -3270,6 +3450,10 @@
   "CTEh+b": {
     "defaultMessage": "Cancel",
     "description": "Experiment page > new run modal > \"cancel\" button label"
+  },
+  "CTXfRn": {
+    "defaultMessage": "Edit alert",
+    "description": "Edit alert rule modal title"
   },
   "CUKIO0": {
     "defaultMessage": "The \"{alias}\" alias is also being used on version {otherVersion}. Adding it to this version will remove it from version {otherVersion}.",
@@ -3515,6 +3699,10 @@
     "defaultMessage": "Pre-built LLM-as-a-judge | Trace level",
     "description": "Label indicating a pre-built trace-level LLM-as-a-judge template"
   },
+  "DkdbfC": {
+    "defaultMessage": "{value} verdicts",
+    "description": "Alert rule summary: a threshold counting judge verdicts"
+  },
   "Dm4Ez0": {
     "defaultMessage": "Filter",
     "description": "Label for the filter button in the trace explorer."
@@ -3563,6 +3751,10 @@
     "defaultMessage": "The request failed. Please try again.",
     "description": "Fallback error message shown inside an input modal when submission fails without details"
   },
+  "E+XmBx": {
+    "defaultMessage": "Output tokens",
+    "description": "Alert rule editor: metric option for completion token counts"
+  },
   "E+bByS": {
     "defaultMessage": "My queues",
     "description": "Review queue sidebar: show-only-owned-queues filter"
@@ -3570,6 +3762,10 @@
   "E/HEEL": {
     "defaultMessage": "Title",
     "description": "MCP compare title heading"
+  },
+  "E0+X0W": {
+    "defaultMessage": "Dismiss",
+    "description": "Active alerts table: dismiss button"
   },
   "E2V1sV": {
     "defaultMessage": "Light",
@@ -3715,6 +3911,10 @@
     "defaultMessage": "Test",
     "description": "Column label for the regression test name column"
   },
+  "EbRa/6": {
+    "defaultMessage": "0 – 1",
+    "description": "Alert rule editor: range of a judge score threshold"
+  },
   "EcjcgN": {
     "defaultMessage": "Metrics",
     "description": "Label for the ungrouped metrics column group in the logged model column selector"
@@ -3743,6 +3943,10 @@
     "defaultMessage": "Prompt version tag deleted",
     "description": "Webhook event label"
   },
+  "EmXwX+": {
+    "defaultMessage": "{samples} of {minimum} samples",
+    "description": "Alert rules table: the rule saw fewer samples than its own minimum, so it cannot fire"
+  },
   "EpFST9": {
     "defaultMessage": "No trace data recorded",
     "description": "Experiment page > traces data drawer > no trace data recorded empty state"
@@ -3767,6 +3971,10 @@
     "defaultMessage": "e.g. 512",
     "description": "Placeholder for the max-tokens input on the playground parameters panel"
   },
+  "EvR37H": {
+    "defaultMessage": "Save",
+    "description": "Edit alert rule: confirm button"
+  },
   "EwAZgg": {
     "defaultMessage": "Edit tags",
     "description": "Run page > Overview > Tags cell > 'Edit' button label"
@@ -3790,6 +3998,10 @@
   "F4K195": {
     "defaultMessage": "No evaluation datasets found",
     "description": "Empty state for the evaluation datasets page"
+  },
+  "F7RGPI": {
+    "defaultMessage": "Minimum samples to fire",
+    "description": "Create alert rule: minimum sample count field label"
   },
   "F8MqzZ": {
     "defaultMessage": "Path",
@@ -3826,6 +4038,14 @@
   "FD9uxI": {
     "defaultMessage": "Delete saved view",
     "description": "Title of the delete-traces-view confirmation"
+  },
+  "FDPGQY": {
+    "defaultMessage": "Exception type",
+    "description": "Alert rule editor: breakdown option for exception type"
+  },
+  "FFKeqf": {
+    "defaultMessage": "No alerts yet",
+    "description": "Alerts page: empty state title when no rules exist"
   },
   "FFe+Ug": {
     "defaultMessage": "Type a value",
@@ -3919,6 +4139,10 @@
     "defaultMessage": "Clear All",
     "description": "String for the clear button to clear any selected parameters and metrics"
   },
+  "FdFCkh": {
+    "defaultMessage": "{amount, plural, one {# hour} other {# hours}}",
+    "description": "A window length in hours"
+  },
   "FedDjX": {
     "defaultMessage": "1. Install MLflow with GenAI extras on the server",
     "description": "AI Gateway setup guide > Step 1 title"
@@ -4007,6 +4231,10 @@
     "defaultMessage": "No access endpoints configured for this server.",
     "description": "Empty state message for access endpoints subsection"
   },
+  "G3oMVJ": {
+    "defaultMessage": "Tool / span name",
+    "description": "Alert rule editor: breakdown option for span name"
+  },
   "G4CVdi": {
     "defaultMessage": "Persona",
     "description": "Column label for simulation persona"
@@ -4050,6 +4278,10 @@
   "GEVu99": {
     "defaultMessage": "Identifier",
     "description": "Package identifier label"
+  },
+  "GEqqUR": {
+    "defaultMessage": "State",
+    "description": "Recent activity table: state column"
   },
   "GFAm1C": {
     "defaultMessage": "A view named \"{name}\" already exists. Choose a different name.",
@@ -4131,6 +4363,10 @@
     "defaultMessage": "URL",
     "description": "Webhook URL field label"
   },
+  "GhPs0i": {
+    "defaultMessage": "days",
+    "description": "Alert rule editor: window unit option"
+  },
   "GifD0J": {
     "defaultMessage": "Explore GenAI features with pre-populated sample data including traces, evaluations, and prompts.",
     "description": "Demo banner description"
@@ -4151,9 +4387,17 @@
     "defaultMessage": "Link to \"{name}\" copied — anyone with access can open this view.",
     "description": "Confirmation toast shown after copying a saved traces view share link"
   },
+  "GnqxtT": {
+    "defaultMessage": "New alert",
+    "description": "Alerts page: button to create an alert"
+  },
   "GogRws": {
     "defaultMessage": "Loading judges...",
     "description": "Loading message while fetching experiment judges"
+  },
+  "GrRjpD": {
+    "defaultMessage": "requests",
+    "description": "Alert rule editor: unit of a threshold counting requests"
   },
   "Gs+blV": {
     "defaultMessage": "Last modified",
@@ -4274,6 +4518,10 @@
   "HVeBoh": {
     "defaultMessage": "Admin",
     "description": "Roles table column header for the admin marker (single-tenant)"
+  },
+  "HWe4G+": {
+    "defaultMessage": "Only if sustained for (minutes, optional)",
+    "description": "Create alert rule: sustain field label"
   },
   "HXbUkt": {
     "defaultMessage": "Child runs",
@@ -4419,6 +4667,10 @@
     "defaultMessage": "Created:",
     "description": "MCP compare metadata created label"
   },
+  "I1l/Jh": {
+    "defaultMessage": "{value} requests",
+    "description": "Alert rule summary: a threshold counting requests"
+  },
   "I1mNex": {
     "defaultMessage": "Select the events that will trigger this webhook.",
     "description": "Webhook events field description"
@@ -4426,6 +4678,10 @@
   "I2UqCo": {
     "defaultMessage": "Search registered models",
     "description": "Placeholder text inside model search bar"
+  },
+  "I3IDBK": {
+    "defaultMessage": "Input tokens",
+    "description": "Alert rule editor: metric option for prompt token counts"
   },
   "I9bJ/T": {
     "defaultMessage": "Select All",
@@ -4471,6 +4727,10 @@
     "defaultMessage": "{count, plural, one {# question} other {# questions}} selected",
     "description": "Create review queue: questions dropdown selected-count summary"
   },
+  "IGshLA": {
+    "defaultMessage": "The percentile must be between 0 and 100.",
+    "description": "Create alert rule: percentile out of range error"
+  },
   "IHyeUr": {
     "defaultMessage": "Stage",
     "description": "Label name for stage metadata in model version page"
@@ -4510,6 +4770,10 @@
   "INrdWe": {
     "defaultMessage": "{count, plural, one {1 trace selected} other {# traces selected}}",
     "description": "Label showing number of traces selected"
+  },
+  "IP/gbq": {
+    "defaultMessage": "No measurements are retained for this period.",
+    "description": "Alert detail: chart empty state when the window has aged out of retention"
   },
   "ISy30V": {
     "defaultMessage": "Are you sure you want to delete the dataset \"{name}\"? This action cannot be undone.",
@@ -4699,6 +4963,10 @@
     "defaultMessage": "Add",
     "description": "Model registry > model version table > metadata column > 'add' button label"
   },
+  "JGRTRS": {
+    "defaultMessage": "Broken down by",
+    "description": "Create alert rule: dimension label"
+  },
   "JJ43Fa": {
     "defaultMessage": "Error",
     "description": "Title for error fallback component in Trace Explorer UI"
@@ -4767,6 +5035,10 @@
     "defaultMessage": "User",
     "description": "Column label for user"
   },
+  "JcgxVz": {
+    "defaultMessage": "Failed to save the alert: {error}",
+    "description": "Edit alert rule: error toast shown when saving fails"
+  },
   "Jdkf6Z": {
     "defaultMessage": "URL is required",
     "description": "Form validation error message informing the user that the webhook URL is required"
@@ -4791,6 +5063,10 @@
     "defaultMessage": "No details for assessment",
     "description": "Evaluation review > assessments > no history"
   },
+  "JkwtHZ": {
+    "defaultMessage": "{value}%",
+    "description": "Alert rule summary: an error-rate threshold"
+  },
   "JmNdE4": {
     "defaultMessage": "required",
     "description": "Text displayed next to a function parameter to indicate that it is required"
@@ -4810,6 +5086,10 @@
   "Jq+dzd": {
     "defaultMessage": "Delete",
     "description": "Bulk-delete button on the users table (no rows selected)"
+  },
+  "JqAfNO": {
+    "defaultMessage": "Could not change whether the alert rule is enabled: {error}",
+    "description": "Alerts page: error toast when enabling or disabling a rule fails"
   },
   "Jr4PZf": {
     "defaultMessage": "server.json:",
@@ -4942,6 +5222,10 @@
   "KMVqUP": {
     "defaultMessage": "Tags",
     "description": "Header for the tags column in the registered prompts table"
+  },
+  "KO8Omu": {
+    "defaultMessage": "{value}",
+    "description": "Alert rule summary: a unitless judge score threshold"
   },
   "KObL+y": {
     "defaultMessage": "Endpoints ({count})",
@@ -5171,6 +5455,10 @@
     "defaultMessage": "Artifact evaluation",
     "description": "A tooltip for the view mode switcher in the experiment view, corresponding to artifact evaluation view"
   },
+  "LUdZsG": {
+    "defaultMessage": "Span type",
+    "description": "Alert rule editor: breakdown option for span type"
+  },
   "LWkwgO": {
     "defaultMessage": "Added {count, plural, one {# trace} other {# traces}} to review.",
     "description": "Add to review queue: success toast after traces are added"
@@ -5287,6 +5575,10 @@
     "defaultMessage": "Version {version}",
     "description": "Model registry > models table > aliases column > version indicator"
   },
+  "M2FYf/": {
+    "defaultMessage": "tokens",
+    "description": "Alert rule editor: unit of a token count threshold"
+  },
   "M3c7bs": {
     "defaultMessage": "Tags",
     "description": "Column label for tags"
@@ -5298,6 +5590,10 @@
   "M65Hoy": {
     "defaultMessage": "Search traces by id, request, or response",
     "description": "Placeholder text for the search input in the trace results table"
+  },
+  "M6a4sA": {
+    "defaultMessage": "Name",
+    "description": "Alert rules table: name column"
   },
   "M8GzoA": {
     "defaultMessage": "Trace archival location cannot use the proxy-only `mlflow-artifacts:` scheme.",
@@ -5342,6 +5638,14 @@
   "MJILab": {
     "defaultMessage": "Violates guidelines",
     "description": "Evaluation results > conversational guidelines assessment > negative value label. Displayed if the assistant violates guidelines at any point in the conversation."
+  },
+  "MJStNU": {
+    "defaultMessage": "Could not delete the alert rule: {error}",
+    "description": "Alerts page: error toast when deleting a rule fails"
+  },
+  "MKCf8S": {
+    "defaultMessage": "{value} tokens",
+    "description": "Alert rule summary: a token count threshold"
   },
   "ML+mQa": {
     "defaultMessage": "Overall assessment:",
@@ -5446,6 +5750,10 @@
   "MhF3mL": {
     "defaultMessage": "Create",
     "description": "Create review question button"
+  },
+  "MhGSRO": {
+    "defaultMessage": "The alert always appears in this list. A channel sends it somewhere else too, and only works if a plugin has registered that type — an unrecognised one is saved but never delivers.",
+    "description": "Create alert rule: what notification channels do and their limitation"
   },
   "MhOmZG": {
     "defaultMessage": "Yes",
@@ -5731,6 +6039,10 @@
     "defaultMessage": "Try this template",
     "description": "Experiment page > new run modal > prompt examples > try template button"
   },
+  "NpKLxf": {
+    "defaultMessage": "Span type",
+    "description": "Alert rule editor: value field label for span type"
+  },
   "NqEELO": {
     "defaultMessage": "View model",
     "description": "Run page > Header > Register model dropdown > View model button label"
@@ -5883,6 +6195,10 @@
     "defaultMessage": "Permissions",
     "description": "Tab trigger for the user's permissions"
   },
+  "OVGidV": {
+    "defaultMessage": "Normal",
+    "description": "Alerts table: rule is healthy"
+  },
   "OW3pF8": {
     "defaultMessage": "Show {count} more intermediate {count, plural, =1 {step} other {steps}}",
     "description": "Link that expands a collapsed list of intermediate function execution steps when clicked"
@@ -5890,6 +6206,10 @@
   "OWCfFp": {
     "defaultMessage": "Promote {sourceModelName} version {sourceModelVersion}",
     "description": "Modal title to promote the model to a different registered model"
+  },
+  "OWerG1": {
+    "defaultMessage": "Failed to create the alert: {error}",
+    "description": "Create alert rule: error toast shown when creation fails"
   },
   "OWfx/j": {
     "defaultMessage": "Regression",
@@ -5942,6 +6262,10 @@
   "OimAJb": {
     "defaultMessage": "Scatter Plot",
     "description": "Tab pane title for scatterplots on the compare runs page"
+  },
+  "OjF3ZV": {
+    "defaultMessage": "{metric} ({aggregation})",
+    "description": "Alert rule summary: fallback for an aggregation this build does not know"
   },
   "OjWQ39": {
     "defaultMessage": "Human feedback",
@@ -6375,6 +6699,10 @@
     "defaultMessage": "Name",
     "description": "Header for the name column in the experiments table"
   },
+  "QhZSuE": {
+    "defaultMessage": "Closed",
+    "description": "Alerts history: the episode was acknowledged"
+  },
   "Qi6Etm": {
     "defaultMessage": "Hide all runs",
     "description": "Menu option for revealing all hidden runs in the experiment view runs compare mode"
@@ -6494,6 +6822,10 @@
   "RCjxf0": {
     "defaultMessage": "Compare runs",
     "description": "Experiment tracking > runs charts > cards > RunsChartsDifferenceChartCard > chart not configured warning > title"
+  },
+  "RDBSFT": {
+    "defaultMessage": "No unacknowledged alerts.",
+    "description": "Alerts page: empty state for the active alerts section"
   },
   "RDg+Pl": {
     "defaultMessage": "Time",
@@ -6727,6 +7059,10 @@
     "defaultMessage": "Pre-built LLM-as-a-judge ({templateCount})",
     "description": "Label for pre-built LLM judge type filter option"
   },
+  "SKblnS": {
+    "defaultMessage": "{value} failures",
+    "description": "Alert rule summary: a threshold counting failures"
+  },
   "SKxS0C": {
     "defaultMessage": "No questions configured for this queue.",
     "description": "Review focused view: empty questions state"
@@ -6814,6 +7150,10 @@
   "Sg3+L8": {
     "defaultMessage": "Versions",
     "description": "MCP registry endpoint modal versions group label"
+  },
+  "ShOOs1": {
+    "defaultMessage": "Worst value in episode",
+    "description": "Alert detail: peak observed value"
   },
   "Shv28w": {
     "defaultMessage": "Save",
@@ -6943,6 +7283,10 @@
     "defaultMessage": "Hide raw server.json",
     "description": "Toggle to hide raw server.json"
   },
+  "TKqHqQ": {
+    "defaultMessage": "Could not dismiss the alert: {error}",
+    "description": "Alerts page: error toast when dismissing an alert fails"
+  },
   "TKtJIK": {
     "defaultMessage": "Page not found",
     "description": "Error message shown to the user when they arrive at a non existent URL"
@@ -6971,6 +7315,10 @@
     "defaultMessage": "Username",
     "description": "Users table username header"
   },
+  "TQogo1": {
+    "defaultMessage": "Judge",
+    "description": "Alert rule editor: value field label for the judge"
+  },
   "TRutFE": {
     "defaultMessage": "Click a graph node to navigate spans",
     "description": "Hint text shown in graph view span navigator when no node is selected"
@@ -6987,6 +7335,10 @@
     "defaultMessage": "Commit message (optional)",
     "description": "Label for the optional commit-message input in the playground save-prompt-version modal"
   },
+  "TVRExO": {
+    "defaultMessage": "Preview",
+    "description": "Create alert rule: the channels field is not a finished feature"
+  },
   "TWnsnV": {
     "defaultMessage": "Run Name",
     "description": "Column header for run name in the evaluation runs table"
@@ -7002,6 +7354,10 @@
   "TXwmoT": {
     "defaultMessage": "Git branch",
     "description": "Usage overview > metrics filter > git branch column option label"
+  },
+  "TYrCxb": {
+    "defaultMessage": "Percentile",
+    "description": "Create alert rule: accessible name of the percentile field"
   },
   "TannO5": {
     "defaultMessage": "Retrieved {sampledCount} out of {totalCount} total logs ({percentage}%)",
@@ -7167,6 +7523,10 @@
     "defaultMessage": "Filter: {filterString}",
     "description": "Filter display for scorer"
   },
+  "UOuftU": {
+    "defaultMessage": "Average",
+    "description": "Alert rule editor: AVG aggregation option"
+  },
   "UP/Atk": {
     "defaultMessage": "Preview how the questions will appear for the human reviewer.",
     "description": "Queue settings: question preview section hint"
@@ -7279,9 +7639,17 @@
     "defaultMessage": "Ground truth values annotated to the trace",
     "description": "Tooltip description for the Expectation column group in the traces table"
   },
+  "UrW1Nw": {
+    "defaultMessage": "exception type \"{value}\"",
+    "description": "Alert rule scope: narrowed to one exception type"
+  },
   "UsvDLH": {
     "defaultMessage": "Select a workspace",
     "description": "Roles tab empty state shown to workspace admins without an active workspace"
+  },
+  "UtD4ZA": {
+    "defaultMessage": "Exception type",
+    "description": "Alert rule editor: value field label for exception type"
   },
   "UtUq/x": {
     "defaultMessage": "Registered models",
@@ -7330,6 +7698,10 @@
   "V1kYC+": {
     "defaultMessage": "Select element type",
     "description": "Placeholder for list element type"
+  },
+  "V1lTaf": {
+    "defaultMessage": "Trace status",
+    "description": "Alert rule editor: value field label for trace status"
   },
   "V386Xy": {
     "defaultMessage": "0 issues doesn't always mean all clear",
@@ -7783,6 +8155,10 @@
     "defaultMessage": "No results",
     "description": "Experiment page > sort selector > no results after filtering"
   },
+  "WpNi2X": {
+    "defaultMessage": "No minimum: the rule fires on whatever the window holds. A percentile over very few samples is close to just its largest value.",
+    "description": "Create alert rule: minimum sample count hint when there is no floor"
+  },
   "WpqCm4": {
     "defaultMessage": "Value for {name}",
     "description": "Placeholder for a variable-value textarea on the playground page"
@@ -7871,6 +8247,10 @@
     "defaultMessage": "Off",
     "description": "Usage tracking disabled state"
   },
+  "X5IBw8": {
+    "defaultMessage": "An alert watches one metric over a rolling window and notifies you once when it crosses your threshold.",
+    "description": "Alerts page: empty state description when no rules exist"
+  },
   "X6P8tX": {
     "defaultMessage": "No models found",
     "description": "Empty state title displayed when all models are filtered out in the logged models list page"
@@ -7882,6 +8262,10 @@
   "X8OaXU": {
     "defaultMessage": "Scheduled",
     "description": "Run page > Overview > Run status cell > Value for scheduled state"
+  },
+  "X9HUnW": {
+    "defaultMessage": "Output cost",
+    "description": "Alert rule editor: metric option for completion spend"
   },
   "XB7wGu": {
     "defaultMessage": "Manual setup",
@@ -8103,9 +8487,17 @@
     "defaultMessage": "Input",
     "description": "Label for the input tokens in the tooltip for the tokens cell."
   },
+  "Y8VUG6": {
+    "defaultMessage": "Tokens",
+    "description": "Alert rule editor: metric option for token counts"
+  },
   "Y9ZFyN": {
     "defaultMessage": "Download artifact",
     "description": "Link to download the artifact of the experiment"
+  },
+  "YDIs3L": {
+    "defaultMessage": "tool \"{value}\"",
+    "description": "Alert rule scope: narrowed to one tool or span name"
   },
   "YECxws": {
     "defaultMessage": "Compare",
@@ -8142,6 +8534,10 @@
   "YINJEO": {
     "defaultMessage": "Metric",
     "description": "Column title for the column displaying the metric names for a run"
+  },
+  "YJJ40n": {
+    "defaultMessage": "Number of judge verdicts",
+    "description": "Alert rule summary: a COUNT rule over judge assessments"
   },
   "YKE3h7": {
     "defaultMessage": "Define custom instructions for LLM-based evaluation. {learnMore}",
@@ -8223,6 +8619,10 @@
     "defaultMessage": "Relevance",
     "description": "Evaluation results > known type of evaluation result assessment > relevance assessment. Used to indicate if the result is relevant to query in context of LLMs evaluation. Label displayed if user provided custom value, e.g. \"Relevance: moderate\""
   },
+  "YjkH6M": {
+    "defaultMessage": "Measure",
+    "description": "Create alert rule: metric section label"
+  },
   "YkcoeV": {
     "defaultMessage": "Displaying Runs from {numExperiments} Experiments",
     "description": "Breadcrumb nav item to link to compare-experiments page on compare runs page"
@@ -8267,6 +8667,10 @@
     "defaultMessage": "No responses or targets logged",
     "description": "Evaluation review > Response section > no values"
   },
+  "YwiReR": {
+    "defaultMessage": "Last evaluated window",
+    "description": "Alert detail: the window of the most recent evaluation"
+  },
   "Ywtqwx": {
     "defaultMessage": "Delete queue",
     "description": "Review queue header: delete-queue menu item"
@@ -8287,6 +8691,10 @@
     "defaultMessage": "Compare selected runs",
     "description": "Tooltip for the compare button when enabled"
   },
+  "Z+vO59": {
+    "defaultMessage": "Rule",
+    "description": "Active alerts table: rule column"
+  },
   "Z/CtWD": {
     "defaultMessage": "Safety",
     "description": "Issue category title for safety"
@@ -8294,6 +8702,10 @@
   "Z/lxEb": {
     "defaultMessage": "Exit review",
     "description": "Review focused view: exit review button"
+  },
+  "Z/q6ZR": {
+    "defaultMessage": "Whole trace",
+    "description": "Alert rule editor: breakdown option for the whole trace"
   },
   "Z4cZMo": {
     "defaultMessage": "by {user}",
@@ -8338,6 +8750,10 @@
   "ZGtIEV": {
     "defaultMessage": "Minimize tracing demo",
     "description": "Accessible label for the button that collapses the expanded tracing demo video"
+  },
+  "ZKjUrc": {
+    "defaultMessage": "This measurement is aggregated across every {label}, so it cannot be narrowed to one.",
+    "description": "Create alert rule: explains why a dimension value cannot be chosen for this metric"
   },
   "ZKtBkW": {
     "defaultMessage": "Edit the request body below and click Send request to call the provider API.",
@@ -8391,6 +8807,10 @@
     "defaultMessage": "Transition to",
     "description": "Text for activity description under confirmation modal for model\n             version stage transition"
   },
+  "ZZrpk6": {
+    "defaultMessage": "Closed",
+    "description": "Alert detail: when the alert was acknowledged"
+  },
   "Za9+Cg": {
     "defaultMessage": "Pass",
     "description": "Evaluation results > overall assessment > pass value label. Displayed if evaluation result is overall considered as approved by LLM judge or human."
@@ -8414,6 +8834,10 @@
   "Zc48NC": {
     "defaultMessage": "(unknown)",
     "description": "Filler text when run's time information is unavailable"
+  },
+  "Zc9rKB": {
+    "defaultMessage": "Cost",
+    "description": "Alert rule editor: metric option for spend"
   },
   "ZcWNz2": {
     "defaultMessage": "Description",
@@ -8446,6 +8870,10 @@
   "ZlokCq": {
     "defaultMessage": "Cancel",
     "description": "A label for the cancel button in the delete prompt modal"
+  },
+  "ZmAsAo": {
+    "defaultMessage": "model \"{value}\"",
+    "description": "Alert rule scope: narrowed to one model"
   },
   "ZoBXpz": {
     "defaultMessage": "Model attributes",
@@ -8747,6 +9175,10 @@
     "defaultMessage": "Find failure patterns hiding in your traces, automatically.",
     "description": "Headline for the issue detection modal"
   },
+  "b+rZMH": {
+    "defaultMessage": "all traces in this experiment",
+    "description": "Alert rule scope: the rule is not narrowed to any slice"
+  },
   "b0KTgh": {
     "defaultMessage": "Add/edit alias for prompt version {version}",
     "description": "Title for the edit aliases modal on the registered prompt details page"
@@ -8826,6 +9258,10 @@
   "bQZDSv": {
     "defaultMessage": "Enter aliases (champion, challenger, etc)",
     "description": "Model registry > model version alias select > Alias input placeholder"
+  },
+  "bR7y+1": {
+    "defaultMessage": "Type a value…",
+    "description": "Create alert rule: option that reveals a free-text dimension value box"
   },
   "bRTk/6": {
     "defaultMessage": "No questions defined for this experiment yet. Create label schemas first.",
@@ -8943,6 +9379,10 @@
     "defaultMessage": "Outputs",
     "description": "Table section name for schema outputs in the model comparison page"
   },
+  "brfLdh": {
+    "defaultMessage": "Samples in that window",
+    "description": "Alert detail: observations in the most recently evaluated window"
+  },
   "buAsCA": {
     "defaultMessage": "Filter by node",
     "description": "Filter button label"
@@ -9002,6 +9442,10 @@
   "c6rG3e": {
     "defaultMessage": "Output is factually accurate and grounded in provided data",
     "description": "Issue category description for correctness"
+  },
+  "c8YM9j": {
+    "defaultMessage": "The window must be between 5 minutes and 3 days. Shorter windows leave gaps that no evaluation inspects; longer ones reach past the raw data's retention, so they cannot be measured.",
+    "description": "Create alert rule: window out of range error"
   },
   "cAKSkQ": {
     "defaultMessage": "Select a cell to display preview",
@@ -9123,6 +9567,10 @@
     "defaultMessage": "Something went wrong",
     "description": "Generic title used when a dataset action surfaces an unexpected error"
   },
+  "cVEl1q": {
+    "defaultMessage": "Worst value",
+    "description": "Active alerts table: peak value column"
+  },
   "cWTq78": {
     "defaultMessage": "Transport Type:",
     "description": "MCP registry endpoint modal transport label"
@@ -9146,6 +9594,10 @@
   "cbj8bg": {
     "defaultMessage": "{count, plural, one {# custom queue} other {# custom queues}}",
     "description": "Manage review questions: count of custom queues using the question being deleted"
+  },
+  "ccbpIE": {
+    "defaultMessage": "Latency",
+    "description": "Alert rule editor: metric option for trace or span latency"
   },
   "cfzQMh": {
     "defaultMessage": "baseline run",
@@ -9243,6 +9695,10 @@
     "defaultMessage": "Rejected",
     "description": "Issue status tag label for rejected issues"
   },
+  "d3gT/g": {
+    "defaultMessage": "No {scope} has been seen in the last 24 hours. The alert will not fire until one appears.",
+    "description": "Create alert rule: warning when the chosen value has never been observed"
+  },
   "d44IPd": {
     "defaultMessage": "Reopen review",
     "description": "Evaluation review > assessments > reopen review tooltip"
@@ -9262,6 +9718,10 @@
   "d72zLS": {
     "defaultMessage": "Toggle session grouping",
     "description": "Tooltip for the group by session button in the traces table toolbar"
+  },
+  "d7bssw": {
+    "defaultMessage": "hours",
+    "description": "Alert rule editor: window unit option"
   },
   "d8I3cy": {
     "defaultMessage": "Show only visible",
@@ -9306,6 +9766,10 @@
   "dMKo75": {
     "defaultMessage": "Search experiments",
     "description": "Placeholder text inside experiments search bar"
+  },
+  "dMRnni": {
+    "defaultMessage": "Number of errors",
+    "description": "Alert rule summary: a COUNT rule over failed spans"
   },
   "dMyfwO": {
     "defaultMessage": "Registered model created",
@@ -9406,6 +9870,10 @@
   "dq8MJd": {
     "defaultMessage": "Contour Plot",
     "description": "Tab text for contour plot on the model comparison page"
+  },
+  "dqWklX": {
+    "defaultMessage": "ex: 95, 99",
+    "description": "Create alert rule: example percentile values"
   },
   "dqfOjO": {
     "defaultMessage": "You cannot select rows when comparing runs",
@@ -9518,6 +9986,14 @@
   "eEjDUQ": {
     "defaultMessage": "Destination",
     "description": "Label for the destination selector in the playground save-prompt-version modal"
+  },
+  "eFcJWC": {
+    "defaultMessage": "Actions",
+    "description": "Alert rules table: actions column"
+  },
+  "eGItI8": {
+    "defaultMessage": "Any judge",
+    "description": "Alert rule editor: unscoped option for the judge"
   },
   "eGhQB6": {
     "defaultMessage": "Override my view",
@@ -9811,6 +10287,10 @@
     "defaultMessage": "— model output conforms to the schema you provide.",
     "description": "Description of the JSON schema mode in the response_format info popover"
   },
+  "fY+2SB": {
+    "defaultMessage": "Cache-read tokens",
+    "description": "Alert rule editor: metric option for prompt tokens served from cache"
+  },
   "fYtbd8": {
     "defaultMessage": "An error occurred while rendering the chat session.",
     "description": "Generic error message for uncaught errors when rendering a single chat session in MLflow experiment page"
@@ -9834,6 +10314,10 @@
   "fdfi96": {
     "defaultMessage": "Create judge",
     "description": "Button to create a new judge"
+  },
+  "fe6Ari": {
+    "defaultMessage": "Model",
+    "description": "Alert rule editor: value field label for the model"
   },
   "ffHGW/": {
     "defaultMessage": "Permissions for this user are temporarily unavailable.",
@@ -9886,6 +10370,10 @@
   "flJNTA": {
     "defaultMessage": "You need to provide values for all defined inputs",
     "description": "Experiment page > new run modal > invalid state - no prompt inputs provided"
+  },
+  "flqhu3": {
+    "defaultMessage": "Recovered",
+    "description": "Alerts table: the alert stopped firing on its own but nobody has acknowledged it yet"
   },
   "fnKCv5": {
     "defaultMessage": "Cancel",
@@ -10011,6 +10499,10 @@
     "defaultMessage": "Image failed to load",
     "description": "Error message when icon URL fails to load in preview"
   },
+  "gEDI42": {
+    "defaultMessage": "traces with status \"{value}\"",
+    "description": "Alert rule scope: narrowed to one trace status"
+  },
   "gEKaYI": {
     "defaultMessage": "Use the MLflow Python client to register an MCP server from a URL:",
     "description": "Instruction text for Python-based MCP server registration"
@@ -10018,6 +10510,10 @@
   "gF1WQp": {
     "defaultMessage": "Add message",
     "description": "Label for the button that appends a new chat message on the playground page"
+  },
+  "gFPCmv": {
+    "defaultMessage": "None were captured for this alert.",
+    "description": "Alert detail: empty state when an alert stored no exemplar traces"
   },
   "gFYM0j": {
     "defaultMessage": "Cancel",
@@ -10551,6 +11047,10 @@
     "defaultMessage": "Adheres to guidelines",
     "description": "Evaluation results > conversational guidelines assessment > positive value label. Displayed if the assistant adheres to guidelines throughout the conversation."
   },
+  "iCmkVY": {
+    "defaultMessage": "Error rate",
+    "description": "Alert rule editor: metric option for the share of calls that failed"
+  },
   "iDpAK8": {
     "defaultMessage": "Add tags",
     "description": "Label for the add tags button in the registered prompts table"
@@ -10566,6 +11066,10 @@
   "iF6r1S": {
     "defaultMessage": "Judges",
     "description": "Section header for judge selection in the run evaluation modal"
+  },
+  "iGFLlF": {
+    "defaultMessage": "Active alerts",
+    "description": "Alerts page: active alerts section title"
   },
   "iJRv1X": {
     "defaultMessage": "Access endpoint",
@@ -10590,6 +11094,10 @@
   "iO+Ro8": {
     "defaultMessage": "https://mcp.example.com/server",
     "description": "MCP registry endpoint modal endpoint placeholder"
+  },
+  "iP6xcm": {
+    "defaultMessage": "Below {count} samples the rule reports “not enough data” and can neither fire nor resolve — roughly {perMinute} per minute at this window. Set 0 for no minimum.",
+    "description": "Create alert rule: minimum sample count hint when a floor is set"
   },
   "iPTAj8": {
     "defaultMessage": "Retrieval",
@@ -10955,6 +11463,10 @@
     "defaultMessage": "Group: {groupName}",
     "description": "Experiment page > grouped runs table > run group header label"
   },
+  "jqkNes": {
+    "defaultMessage": "Deleted rule",
+    "description": "Alert detail: title when the rule behind the alert has been deleted"
+  },
   "js4/Y8": {
     "defaultMessage": "You can also <link>register it to the model registry</link> to version control",
     "description": "Sub text to tell the users where one can go to register the model artifact"
@@ -10987,6 +11499,10 @@
     "defaultMessage": "Optimize",
     "description": "A label for a button to display the modal with instructions to optimize the prompt"
   },
+  "k/shpD": {
+    "defaultMessage": "Could not load the values observed recently, so this one has not been checked against them.",
+    "description": "Create alert rule: warning when the observed dimension values could not be fetched"
+  },
   "k0CEIu": {
     "defaultMessage": "OpenAI Chat Completions",
     "description": "Unified API variant: OpenAI Chat Completions"
@@ -11010,6 +11526,10 @@
   "k2bPN+": {
     "defaultMessage": "Last used",
     "description": "Badge for last used workspace"
+  },
+  "k3HTdM": {
+    "defaultMessage": "Remove",
+    "description": "Create alert rule: remove a notification channel"
   },
   "k4F8aJ": {
     "defaultMessage": "Copy issue ID",
@@ -11139,6 +11659,10 @@
     "defaultMessage": "Edit",
     "description": "Chat sessions actions dropdown group label for edit actions"
   },
+  "kWU/81": {
+    "defaultMessage": "Model",
+    "description": "Alert rule editor: breakdown option for the model"
+  },
   "kWUhea": {
     "defaultMessage": "Params",
     "description": "Label for 'params' option group in the compare runs chart configure modal"
@@ -11166,6 +11690,10 @@
   "keSIQ4": {
     "defaultMessage": "null",
     "description": "null assessment label"
+  },
+  "kfK60x": {
+    "defaultMessage": "Count of",
+    "description": "Alert rule editor: COUNT aggregation option"
   },
   "kgJSBI": {
     "defaultMessage": "Delete",
@@ -11203,9 +11731,21 @@
     "defaultMessage": "Learn more about the AI Gateway in the {gatewayDocs}.",
     "description": "AI Gateway setup guide > Documentation link"
   },
+  "kof885": {
+    "defaultMessage": "Cache-write tokens",
+    "description": "Alert rule editor: metric option for prompt tokens written to cache"
+  },
+  "kqQsXX": {
+    "defaultMessage": "verdicts",
+    "description": "Alert rule editor: unit of a threshold counting judge verdicts"
+  },
   "ktiuki": {
     "defaultMessage": "Get Link",
     "description": "Title text for get-link modal"
+  },
+  "kwPXa+": {
+    "defaultMessage": "Average {metric}",
+    "description": "Alert rule summary: an AVG rule"
   },
   "kwXUSF": {
     "defaultMessage": "Search MCP servers by name",
@@ -11238,6 +11778,10 @@
   "lA8QO2": {
     "defaultMessage": "Edit tags",
     "description": "Label for the edit tags button in the registered prompts table"
+  },
+  "lCQIVn": {
+    "defaultMessage": "Severity",
+    "description": "Alert rules table: severity column"
   },
   "lCfyQO": {
     "defaultMessage": "Dataset",
@@ -11327,6 +11871,10 @@
     "defaultMessage": "Parameters",
     "description": "Section header for the parameters in a 'group by' selector"
   },
+  "lSyDIu": {
+    "defaultMessage": "Closed by",
+    "description": "Recent activity table: closed-by column"
+  },
   "lT1Joh": {
     "defaultMessage": "No metrics match the search filter",
     "description": "Message displayed when no metrics match the search filter in the run details page details metrics table"
@@ -11407,6 +11955,10 @@
     "defaultMessage": "We couldn't load your workspaces.",
     "description": "Home page workspaces error message"
   },
+  "lpYo80": {
+    "defaultMessage": "minutes",
+    "description": "Alert rule editor: unit of a latency threshold"
+  },
   "ls3868": {
     "defaultMessage": "Guidelines",
     "description": "Evaluation results > known type of evaluation result assessment > guidelines assessment. Used to indicate if the result adheres to the guidelines in context of LLMs evaluation. Label displayed if user provided custom value, e.g. \"Guidelines: moderate\""
@@ -11430,6 +11982,10 @@
   "lyNyOH": {
     "defaultMessage": "Default queue",
     "description": "Add to review queue: the experiment default queue option"
+  },
+  "m/Tgfz": {
+    "defaultMessage": "Notify elsewhere",
+    "description": "Create alert rule: optional external notification channels"
   },
   "m1Nb7W": {
     "defaultMessage": "Save",
@@ -11875,6 +12431,10 @@
     "defaultMessage": "Trace archival retention must use the format '<int><unit>', where unit is one of 'm', 'h', or 'd'.",
     "description": "Validation error for invalid trace archival retention format"
   },
+  "noUrSX": {
+    "defaultMessage": "Cancel",
+    "description": "Create alert rule: cancel button"
+  },
   "npHb2a": {
     "defaultMessage": "Show more columns {count, select, 0 {} other {({count} total)}}",
     "description": "Label for a CTA button in experiment runs table which invokes column management dropdown"
@@ -11938,6 +12498,10 @@
   "o4MUEA": {
     "defaultMessage": "Name:",
     "description": "MCP server version detail name label"
+  },
+  "o4vHLI": {
+    "defaultMessage": "Scope: {scope}",
+    "description": "Create alert rule: scope summary"
   },
   "o5AS8R": {
     "defaultMessage": "Custom code judge",
@@ -12247,6 +12811,10 @@
     "defaultMessage": "What do you want the scorer to evaluate?",
     "description": "Hint for the scorer evaluation scope selection"
   },
+  "pYiIp0": {
+    "defaultMessage": "{metric}{scope} {comparator} {threshold} over {window}",
+    "description": "Alert rules table: one line describing what a rule watches"
+  },
   "paQ2Wc": {
     "defaultMessage": "Stage (deprecated)",
     "description": "Label name for the deprecated stage metadata in model version page"
@@ -12379,6 +12947,10 @@
     "defaultMessage": "No logs available",
     "description": "Empty state title for logs tab"
   },
+  "qDBhrB": {
+    "defaultMessage": "The minimum must be a whole number of samples, and cannot be negative. Use 0 for no minimum.",
+    "description": "Create alert rule: minimum sample count invalid error"
+  },
   "qDiJI2": {
     "defaultMessage": "Forecasting",
     "description": "Label for experiments focused on time series forecasting"
@@ -12394,6 +12966,10 @@
   "qGL2Jy": {
     "defaultMessage": "Settings",
     "description": "Title of the playground settings drawer"
+  },
+  "qGRHtp": {
+    "defaultMessage": "Started",
+    "description": "Recent activity table: start time column"
   },
   "qGqURi": {
     "defaultMessage": "Manage",
@@ -12466,6 +13042,10 @@
   "qVQYZH": {
     "defaultMessage": "Show less",
     "description": "Button to close alert description"
+  },
+  "qZDytd": {
+    "defaultMessage": "Alert me when it is",
+    "description": "Create alert rule: predicate label"
   },
   "qZKsz+": {
     "defaultMessage": "Cancel",
@@ -12635,6 +13215,10 @@
     "defaultMessage": "Open dataset record {recordId}",
     "description": "Aria label for the record-id activator in the V2 dataset records table"
   },
+  "rAIBFi": {
+    "defaultMessage": "judge \"{value}\"",
+    "description": "Alert rule scope: narrowed to one judge"
+  },
   "rAJDzz": {
     "defaultMessage": "Transition existing {currentStage} model version to {archivedStage}",
     "description": "Description text for checkbox for archiving existing model versions\n                  in the toStage for model version stage transition request"
@@ -12658,6 +13242,10 @@
   "rDIzM4": {
     "defaultMessage": "This passphrase protects encryption keys and should never be shared. {securityNote}",
     "description": "AI Gateway setup guide > Passphrase warning"
+  },
+  "rDKD29": {
+    "defaultMessage": "Actions",
+    "description": "Active alerts table: actions column"
   },
   "rDxqAu": {
     "defaultMessage": "Response",
@@ -12806,6 +13394,10 @@
   "rxMHgr": {
     "defaultMessage": "Stage transition",
     "description": "Title for a model version stage transition modal"
+  },
+  "ryF2me": {
+    "defaultMessage": "Alerting",
+    "description": "Alerts table: rule has an unacknowledged alert"
   },
   "rytnce": {
     "defaultMessage": "Copy experiment id",
@@ -12966,6 +13558,10 @@
   "sYkXR1": {
     "defaultMessage": "JSON body for the MLflow Invocations API. Use \"messages\" for chat or \"input\" for embeddings.",
     "description": "Request body tooltip for unified MLflow Invocations API"
+  },
+  "sZfq4G": {
+    "defaultMessage": "Edit rule",
+    "description": "Alert detail: open the rule editor"
   },
   "saHb/5": {
     "defaultMessage": "Found {issueCount, plural, =0 {no issues} one {1 issue} other {# issues}} across {traceCount, plural, one {1 trace} other {# traces}}.",
@@ -13363,6 +13959,10 @@
     "defaultMessage": "Comparing {runs} MLflow Runs",
     "description": "Page title for the compare runs page"
   },
+  "ugXxmo": {
+    "defaultMessage": "Judge",
+    "description": "Alert rule editor: breakdown option for the judge"
+  },
   "ugm2f6": {
     "defaultMessage": "Unpin run",
     "description": "A tooltip for the pin icon button in the runs table next to the pinned run"
@@ -13407,6 +14007,10 @@
     "defaultMessage": "Reviewers",
     "description": "Queue settings: members field label"
   },
+  "utTxDb": {
+    "defaultMessage": "Errors",
+    "description": "Alert rule editor: metric option for failures"
+  },
   "utyagz": {
     "defaultMessage": "Feedback",
     "description": "Label for the feedback section in the assessments pane"
@@ -13438,6 +14042,10 @@
   "v5gzhw": {
     "defaultMessage": "Runtime arguments",
     "description": "Package runtime arguments label"
+  },
+  "v7V9h5": {
+    "defaultMessage": "percent",
+    "description": "Alert rule editor: unit of an error-rate threshold"
   },
   "v8UFxB": {
     "defaultMessage": "No datasets were recorded for this experiment's runs.",
@@ -13490,6 +14098,10 @@
   "vNmXQ2": {
     "defaultMessage": "Loading guardrails...",
     "description": "Loading guardrails"
+  },
+  "vO54Xj": {
+    "defaultMessage": "Fired",
+    "description": "Alert detail: when the alert started firing"
   },
   "vO6fuZ": {
     "defaultMessage": "Question preview",
@@ -13615,6 +14227,10 @@
     "defaultMessage": "Enter an expectation name",
     "description": "Placeholder for the expectation name typeahead"
   },
+  "w+Xs9j": {
+    "defaultMessage": "Any status",
+    "description": "Alert rule editor: unscoped option for trace status"
+  },
   "w/sljb": {
     "defaultMessage": "Sort descending",
     "description": "Label for the sort descending button in the logged model list page"
@@ -13642,6 +14258,10 @@
   "w5RsIq": {
     "defaultMessage": "{action} package {identifier}",
     "description": "Aria label for expanding/collapsing a package row"
+  },
+  "w5tySd": {
+    "defaultMessage": "minutes",
+    "description": "Alert rule editor: window unit option"
   },
   "w80phd": {
     "defaultMessage": "Error",
@@ -13795,6 +14415,10 @@
     "defaultMessage": "Columns",
     "description": "Evaluation review > evaluations list > filter dropdown button"
   },
+  "wmPhXf": {
+    "defaultMessage": "${value}",
+    "description": "Alert rule summary: a spend threshold in US dollars"
+  },
   "womPSY": {
     "defaultMessage": "Session",
     "description": "Column label for session"
@@ -13923,6 +14547,10 @@
     "defaultMessage": "Set spending limits and control costs across your endpoints.",
     "description": "Empty state message for budgets list"
   },
+  "xGZhB6": {
+    "defaultMessage": "Rule",
+    "description": "Recent activity table: rule column"
+  },
   "xIP8WW": {
     "defaultMessage": "Are you sure you want to delete these runs?",
     "description": "Delete evaluation runs modal confirmation text"
@@ -13983,6 +14611,10 @@
     "defaultMessage": "Next",
     "description": "Button text for next trace"
   },
+  "xVlr1Q": {
+    "defaultMessage": "Any span type",
+    "description": "Alert rule editor: unscoped option for span type"
+  },
   "xWcxhf": {
     "defaultMessage": "No items found",
     "description": "Message shown when no items match the search"
@@ -14018,6 +14650,10 @@
   "xdFMIN": {
     "defaultMessage": "Dataset name",
     "description": "Dataset name label"
+  },
+  "xg250F": {
+    "defaultMessage": "Recovered",
+    "description": "Alert detail: when the metric became healthy again"
   },
   "xgbeVS": {
     "defaultMessage": "Large",
@@ -14227,6 +14863,10 @@
     "defaultMessage": "Save",
     "description": "Button to save notes assessment"
   },
+  "yn+bOO": {
+    "defaultMessage": "Any model",
+    "description": "Alert rule editor: unscoped option for the model"
+  },
   "ynec8t": {
     "defaultMessage": "To do",
     "description": "Review queue sidebar: still-to-review count column"
@@ -14314,6 +14954,10 @@
   "z6qX4/": {
     "defaultMessage": "This endpoint may have been deleted",
     "description": "Tooltip for deleted endpoint"
+  },
+  "z71ajJ": {
+    "defaultMessage": "Total",
+    "description": "Alert rule editor: SUM aggregation option"
   },
   "z8srAp": {
     "defaultMessage": "Trace archival retention",
@@ -14435,6 +15079,14 @@
     "defaultMessage": "Categories",
     "description": "Run page > Overview > Issue categories being detected"
   },
+  "zc9ve9": {
+    "defaultMessage": "Severity",
+    "description": "Create alert rule: severity field label"
+  },
+  "zcYx3e": {
+    "defaultMessage": "State",
+    "description": "Active alerts table: state column"
+  },
   "zcnCPF": {
     "defaultMessage": "Issues",
     "description": "Label for the issues section in the assessments pane"
@@ -14475,6 +15127,10 @@
     "defaultMessage": "The model will be registered as a new version of {selectedModel}.",
     "description": "Explantory text for registering a model"
   },
+  "zmKC17": {
+    "defaultMessage": "{percentile}th percentile {metric}",
+    "description": "Alert rule summary: a PERCENTILE rule, e.g. \"95th percentile latency\""
+  },
   "zmMR5p": {
     "defaultMessage": "An error occurred while rendering this component.",
     "description": "Description for default error message in prompts management UI"
@@ -14486,6 +15142,10 @@
   "zp4MBw": {
     "defaultMessage": "Token count",
     "description": "Label for the token count section"
+  },
+  "zrl21F": {
+    "defaultMessage": "Name",
+    "description": "Create alert rule: name field label"
   },
   "zt66ty": {
     "defaultMessage": "About sampling parameters",
@@ -14510,6 +15170,10 @@
   "zxfWCx": {
     "defaultMessage": "Add/Edit Prompt Version Metadata",
     "description": "Title for a modal that allows the user to add or edit metadata tags on prompt versions."
+  },
+  "zxrIYV": {
+    "defaultMessage": "failures",
+    "description": "Alert rule editor: unit of a threshold counting failures"
   },
   "zyPq2R": {
     "defaultMessage": "An error occurred while attempting to delete traces. Please refresh the page and try again.",

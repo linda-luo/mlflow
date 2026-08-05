@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import json
 import logging
@@ -183,11 +184,20 @@ from mlflow.utils.rest_utils import (
     get_single_trace_endpoint,
     get_trace_tag_endpoint,
     http_request,
+    http_request_safe,
     verify_rest_response,
 )
 from mlflow.utils.validation import _resolve_experiment_ids_and_locations
 
 _logger = logging.getLogger(__name__)
+
+_ALERTS_API_PATH_PREFIX = "/ajax-api/3.0/mlflow/alerts"
+"""Alerting is served by hand-rolled JSON endpoints rather than protobuf RPCs.
+
+Proto regeneration needs Docker and is the productionization step, so these
+paths are spelled out here instead of coming from `extract_api_info_for_service`.
+The server registers the `/api/3.0` twin of every one of them as well.
+"""
 
 
 # MRO Note: RestGatewayStoreMixin must be listed before AbstractStore in the inheritance chain.
@@ -2492,3 +2502,133 @@ class RestStore(
             List of logged Span entities.
         """
         return self.log_spans(location, spans)
+
+    # ------------------------------------------------------------------
+    # Alerting. See mlflow/alerts/ for the entity dataclasses.
+    #
+    # These exist so the feature is not silently absent for anyone pointing at
+    # a remote tracking server -- the store trio is abstract + sqlalchemy +
+    # rest, and omitting this file is the easiest way to ship an alerting
+    # feature that only works in-process.
+    #
+    # The endpoints are hand-rolled JSON rather than protobuf RPCs, so these
+    # methods talk to `http_request_safe` directly instead of going through
+    # `_call_endpoint`. Entity imports are lazy for the same reason as the
+    # review-queue methods above: mlflow.genai closes an import cycle back
+    # onto RestStore.
+    # ------------------------------------------------------------------
+
+    def _call_alerts_endpoint(self, path, method, json_body=None, params=None):
+        kwargs = {}
+        if json_body is not None:
+            kwargs["json"] = json_body
+        if params is not None:
+            kwargs["params"] = params
+        endpoint = f"{_ALERTS_API_PATH_PREFIX}{path}"
+        response = http_request_safe(self.get_host_creds(), endpoint, method, **kwargs)
+        return response.json()
+
+    def create_alert_rule(self, rule):
+        response = self._call_alerts_endpoint("/rules", "POST", json_body=_alert_rule_to_dict(rule))
+        return _alert_rule_from_dict(response["alert_rule"])
+
+    def get_alert_rule(self, alert_rule_id):
+        response = self._call_alerts_endpoint(f"/rules/{alert_rule_id}", "GET")
+        return _alert_rule_from_dict(response["alert_rule"])
+
+    def list_alert_rules(self, experiment_id):
+        response = self._call_alerts_endpoint(
+            "/rules", "GET", params={"experiment_id": str(experiment_id)}
+        )
+        return [_alert_rule_from_dict(r) for r in response.get("alert_rules", [])]
+
+    def update_alert_rule(self, alert_rule_id, **updates):
+        response = self._call_alerts_endpoint(
+            f"/rules/{alert_rule_id}", "PATCH", json_body=dict(updates)
+        )
+        return _alert_rule_from_dict(response["alert_rule"])
+
+    def delete_alert_rule(self, alert_rule_id):
+        self._call_alerts_endpoint(f"/rules/{alert_rule_id}", "DELETE")
+
+    def list_alert_instances(self, experiment_id, states=None, max_results=100):
+        params = {"experiment_id": str(experiment_id), "max_results": max_results}
+        if states is not None:
+            params["states"] = list(states)
+        response = self._call_alerts_endpoint("/instances", "GET", params=params)
+        return [_alert_instance_from_dict(i) for i in response.get("alert_instances", [])]
+
+    def dismiss_alert_instance(self, alert_instance_id, dismissed_by):
+        response = self._call_alerts_endpoint(
+            f"/instances/{alert_instance_id}/dismiss",
+            "POST",
+            json_body={"dismissed_by": dismissed_by},
+        )
+        return _alert_instance_from_dict(response["alert_instance"])
+
+    def list_alert_dimension_values(self, experiment_id, metric_key, dimension_key):
+        response = self._call_alerts_endpoint(
+            "/dimension-values",
+            "GET",
+            params={
+                "experiment_id": str(experiment_id),
+                "metric": metric_key,
+                "dimension_key": dimension_key,
+            },
+        )
+        return list(response.get("dimension_values", []))
+
+
+def _alert_rule_to_dict(rule) -> dict:
+    """The create request body for ``rule``, in the types the endpoint accepts.
+
+    Deliberately not ``dataclasses.asdict``. Two things go wrong with it:
+
+    * ``AlertRule.experiment_id`` is an ``int`` -- that is the declared type, and
+      what the SQLAlchemy store hands back -- while the endpoint validates it with
+      ``_assert_string``. Sending the dataclass verbatim therefore 400s on exactly
+      the value a caller is supposed to supply.
+    * It also sends the server-owned fields (``alert_rule_id``,
+      ``evaluation_interval_seconds``, ``last_evaluated_ms``, ``deleted_at_ms``
+      and the rest), which the handler ignores today but which read as a client
+      trying to set them.
+
+    So the payload is built from the create schema instead. ``min_sample_count``
+    is only sent when the rule carries one, because omitting the key is what asks
+    the server for the derived suggestion -- sending an explicit ``0`` means zero.
+    """
+    payload = {
+        "experiment_id": str(rule.experiment_id),
+        "name": rule.name,
+        "metric_key": rule.metric_key,
+        "dimension_key": rule.dimension_key,
+        "aggregation": rule.aggregation,
+        "comparator": rule.comparator,
+        "threshold": float(rule.threshold),
+        "window_seconds": int(rule.window_seconds),
+        "dimension_value": rule.dimension_value,
+        "percentile_value": rule.percentile_value,
+        "sustain_seconds": int(rule.sustain_seconds),
+        "severity": rule.severity,
+        "enabled": bool(rule.enabled),
+        "channels": rule.channels or [],
+    }
+    if rule.min_sample_count:
+        payload["min_sample_count"] = int(rule.min_sample_count)
+    return payload
+
+
+def _alert_rule_from_dict(payload: dict):
+    from mlflow.alerts.entities import AlertRule
+
+    known = {f.name for f in dataclasses.fields(AlertRule)}
+    # Unknown keys are dropped rather than raising: a newer server may add
+    # fields, and an older client should still be able to read the rest.
+    return AlertRule(**{k: v for k, v in payload.items() if k in known})
+
+
+def _alert_instance_from_dict(payload: dict):
+    from mlflow.alerts.entities import AlertInstance
+
+    known = {f.name for f in dataclasses.fields(AlertInstance)}
+    return AlertInstance(**{k: v for k, v in payload.items() if k in known})

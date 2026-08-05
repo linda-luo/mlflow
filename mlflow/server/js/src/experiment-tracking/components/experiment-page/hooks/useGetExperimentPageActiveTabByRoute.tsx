@@ -21,6 +21,7 @@ const ExperimentPageRoutePathToTabNameMap = map(
     [RoutePaths.experimentPageTabPrompts]: ExperimentPageTabName.Prompts,
     [RoutePaths.experimentPageTabPromptDetails]: ExperimentPageTabName.Prompts,
     [RoutePaths.experimentPageTabReviewQueue]: ExperimentPageTabName.ReviewQueue,
+    [RoutePaths.experimentPageTabAlerts]: ExperimentPageTabName.Alerts,
   },
   (tabName, routePath) => ({ routePath, tabName }),
 );

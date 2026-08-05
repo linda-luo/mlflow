@@ -8,6 +8,7 @@ import {
   GavelIcon,
   ListIcon,
   ModelsIcon,
+  NotificationIcon,
   PlayIcon,
   PlusMinusSquareIcon,
   SpeechBubbleIcon,
@@ -56,6 +57,17 @@ const ExperimentPageSideNavGenAIConfig = {
       icon: <SpeechBubbleIcon />,
       tabName: ExperimentPageTabName.ChatSessions,
       componentId: 'mlflow.experiment-side-nav.genai.sessions',
+    },
+    {
+      label: (
+        <FormattedMessage
+          defaultMessage="Alerts"
+          description="Label for the alerts tab in the MLflow experiment navbar"
+        />
+      ),
+      icon: <NotificationIcon />,
+      tabName: ExperimentPageTabName.Alerts,
+      componentId: 'mlflow.experiment-side-nav.genai.alerts',
     },
   ],
   evaluation: [
